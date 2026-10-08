@@ -1,0 +1,203 @@
+[
+  {
+    "id": "table.PasswordResetToken",
+    "label": "Create table \"PasswordResetToken\"",
+    "summary": "Creates table \"PasswordResetToken\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "PasswordResetToken"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"PasswordResetToken\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"PasswordResetToken\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"PasswordResetToken\"",
+        "sql": "CREATE TABLE \"public\".\"PasswordResetToken\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"expiresAt\" timestamptz NOT NULL,\n  \"id\" text NOT NULL,\n  \"tokenHash\" text NOT NULL,\n  \"updatedAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"usedAt\" timestamptz,\n  \"userId\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"PasswordResetToken\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"PasswordResetToken\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.PasswordResetToken.PasswordResetToken_tokenHash_key",
+    "label": "Add unique constraint on \"PasswordResetToken\" (tokenHash)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "PasswordResetToken_tokenHash_key",
+        "table": "PasswordResetToken"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"PasswordResetToken_tokenHash_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "PasswordResetToken_tokenHash_key",
+          "public",
+          "\"public\".\"PasswordResetToken\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"PasswordResetToken_tokenHash_key\"",
+        "sql": "ALTER TABLE \"public\".\"PasswordResetToken\" ADD CONSTRAINT \"PasswordResetToken_tokenHash_key\" UNIQUE (\"tokenHash\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"PasswordResetToken_tokenHash_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "PasswordResetToken_tokenHash_key",
+          "public",
+          "\"public\".\"PasswordResetToken\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.PasswordResetToken.PasswordResetToken_expiresAt_idx_6b6b8c10",
+    "label": "Create index \"PasswordResetToken_expiresAt_idx_6b6b8c10\" on \"PasswordResetToken\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "PasswordResetToken_expiresAt_idx_6b6b8c10",
+        "table": "PasswordResetToken"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"PasswordResetToken_expiresAt_idx_6b6b8c10\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"PasswordResetToken_expiresAt_idx_6b6b8c10\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"PasswordResetToken_expiresAt_idx_6b6b8c10\"",
+        "sql": "CREATE INDEX \"PasswordResetToken_expiresAt_idx_6b6b8c10\" ON \"public\".\"PasswordResetToken\" (\"expiresAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"PasswordResetToken_expiresAt_idx_6b6b8c10\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"PasswordResetToken_expiresAt_idx_6b6b8c10\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.PasswordResetToken.PasswordResetToken_userId_idx_a489d58a",
+    "label": "Create index \"PasswordResetToken_userId_idx_a489d58a\" on \"PasswordResetToken\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "PasswordResetToken_userId_idx_a489d58a",
+        "table": "PasswordResetToken"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"PasswordResetToken_userId_idx_a489d58a\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"PasswordResetToken_userId_idx_a489d58a\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"PasswordResetToken_userId_idx_a489d58a\"",
+        "sql": "CREATE INDEX \"PasswordResetToken_userId_idx_a489d58a\" ON \"public\".\"PasswordResetToken\" (\"userId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"PasswordResetToken_userId_idx_a489d58a\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"PasswordResetToken_userId_idx_a489d58a\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.PasswordResetToken.PasswordResetToken_userId_fkey",
+    "label": "Add foreign key \"PasswordResetToken_userId_fkey\" on \"PasswordResetToken\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "PasswordResetToken_userId_fkey",
+        "table": "PasswordResetToken"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"PasswordResetToken_userId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "PasswordResetToken_userId_fkey",
+          "public",
+          "\"public\".\"PasswordResetToken\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"PasswordResetToken_userId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"PasswordResetToken\"\nADD CONSTRAINT \"PasswordResetToken_userId_fkey\"\nFOREIGN KEY (\"userId\")\nREFERENCES \"public\".\"User\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"PasswordResetToken_userId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "PasswordResetToken_userId_fkey",
+          "public",
+          "\"public\".\"PasswordResetToken\""
+        ]
+      }
+    ]
+  }
+]
