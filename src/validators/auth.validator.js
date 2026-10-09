@@ -9,7 +9,18 @@ const { z } = require("zod");
  * - At least 1 special character
  */
 const passwordSchema = z
-  .string({ required_error: "Password is required" })
+  .string({ error: "Password is required" })
+  .min(8, "Password must be at least 8 characters long")
+  .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+  .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+  .regex(/[0-9]/, "Password must contain at least one number")
+  .regex(
+    /[^A-Za-z0-9]/,
+    "Password must contain at least one special character (!@#$%^&* etc.)"
+  );
+
+const newPasswordSchema = z
+  .string({ error: "New password is required" })
   .min(8, "Password must be at least 8 characters long")
   .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
   .regex(/[a-z]/, "Password must contain at least one lowercase letter")
@@ -26,14 +37,14 @@ const passwordSchema = z
  * - Must be valid email syntax
  */
 const emailSchema = z
-  .string({ required_error: "Email is required" })
+  .string({ error: "Email is required" })
   .trim()
   .toLowerCase()
   .email("Please provide a valid email address");
 
 const signupSchema = z.object({
   firstName: z
-    .string({ required_error: "First name is required" })
+    .string({ error: "First name is required" })
     .trim()
     .min(1, "First name is required")
     .max(100, "First name cannot exceed 100 characters"),
@@ -51,7 +62,7 @@ const signupSchema = z.object({
 const loginSchema = z.object({
   email: emailSchema,
   password: z
-    .string({ required_error: "Password is required" })
+    .string({ error: "Password is required" })
     .min(1, "Password is required"),
 });
 
@@ -61,23 +72,31 @@ const forgotPasswordSchema = z.object({
 
 const resetPasswordSchema = z.object({
   token: z
-    .string({ required_error: "Reset token is required" })
+    .string({ error: "Reset token is required" })
     .trim()
     .min(1, "Reset token is required"),
-  newPassword: passwordSchema,
+  newPassword: newPasswordSchema,
+});
+
+const requestVerificationSchema = z.object({
+  email: emailSchema,
 });
 
 const verifyEmailSchema = z.object({
-  email: emailSchema,
-  token: z.string().trim().optional(),
+  token: z
+    .string({ error: "Verification token is required" })
+    .trim()
+    .min(1, "Verification token is required"),
 });
 
 module.exports = {
   passwordSchema,
+  newPasswordSchema,
   emailSchema,
   signupSchema,
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  requestVerificationSchema,
   verifyEmailSchema,
 };

@@ -12,6 +12,8 @@ const sessionRepository = require("../repositories/session.repository");
 
 const userRepository = require("../repositories/user.repository");
 
+const emailVerificationRepository = require("../repositories/email-verification.repository");
+
 function hashRefreshToken(token) {
   return crypto
     .createHash("sha256")
@@ -20,6 +22,13 @@ function hashRefreshToken(token) {
 }
 
 function hashResetToken(token) {
+  return crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+}
+
+function hashVerificationToken(token) {
   return crypto
     .createHash("sha256")
     .update(token)
@@ -387,16 +396,83 @@ async resetPassword(token, newPassword) {
   };
 },
 
-async verifyEmail(email) {
+async requestEmailVerification(email) {
+  const normalizedEmail = email.trim().toLowerCase();
   const user = await userRepository.findFirst({
-    email,
+    email: normalizedEmail,
   });
 
   if (!user) {
-    throw new Error("User not found");
+    return {
+      success: true,
+      message:
+        "If an account exists for this email, a verification link has been generated",
+    };
+  }
+
+  if (user.isVerified) {
+    return {
+      success: true,
+      message: "This email address is already verified.",
+    };
+  }
+
+  await emailVerificationRepository.deletePendingByUserId(user.id);
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = hashVerificationToken(rawToken);
+
+  // 24 hours expiration matching the email design
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  await emailVerificationRepository.create({
+    userId: user.id,
+    tokenHash,
+    expiresAt,
+  });
+
+  const verifyUrl = `${process.env.APP_URL || "http://localhost:3000"}/verify?token=${rawToken}&email=${encodeURIComponent(user.email)}`;
+
+  console.log("EMAIL VERIFICATION URL (valid for 24 hours):");
+  console.log(verifyUrl);
+
+  return {
+    success: true,
+    message:
+      "If an account exists for this email, a verification link has been generated",
+  };
+},
+
+async verifyEmailToken(token) {
+  if (!token) {
+    throw new Error("Verification token is required");
+  }
+
+  const tokenHash = hashVerificationToken(token.trim());
+  const record = await emailVerificationRepository.findByTokenHash(tokenHash);
+
+  if (!record) {
+    throw new Error("Invalid or expired verification token");
+  }
+
+  if (record.usedAt) {
+    throw new Error("Verification token has already been used");
+  }
+
+  if (new Date(record.expiresAt).getTime() <= Date.now()) {
+    throw new Error("Verification token has expired. Please request a new verification link.");
+  }
+
+  const user = await userRepository.findFirst({
+    id: record.userId,
+  });
+
+  if (!user) {
+    throw new Error("User associated with this token not found");
   }
 
   await userRepository.markAsVerified(user.email);
+  await emailVerificationRepository.markAsUsed(record.id);
 
   return {
     success: true,

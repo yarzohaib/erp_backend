@@ -8,6 +8,7 @@ const {
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  requestVerificationSchema,
   verifyEmailSchema,
 } = require("../validators/auth.validator");
 
@@ -51,6 +52,12 @@ router.post(
   "/reset-password",
   validate(resetPasswordSchema),
   authController.resetPassword
+);
+
+router.post(
+  "/request-verification",
+  validate(requestVerificationSchema),
+  authController.requestVerification
 );
 
 router.post(

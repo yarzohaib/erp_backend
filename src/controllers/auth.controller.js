@@ -322,18 +322,28 @@ async resetPassword(req, res) {
   }
 },
 
-async verifyEmail(req, res) {
+async requestVerification(req, res) {
   try {
     const { email } = req.body;
 
-    if (!email || !email.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
-    }
+    const result = await authService.requestEmailVerification(email);
 
-    await authService.verifyEmail(email.trim());
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("REQUEST VERIFICATION ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to process verification request",
+    });
+  }
+},
+
+async verifyEmail(req, res) {
+  try {
+    const { token } = req.body;
+
+    await authService.verifyEmailToken(token);
 
     return res.status(200).json({
       success: true,
@@ -342,8 +352,11 @@ async verifyEmail(req, res) {
   } catch (error) {
     console.error("VERIFY EMAIL ERROR:", error);
 
-    if (error.message === "User not found") {
-      return res.status(404).json({
+    if (
+      error.message.includes("verification token") ||
+      error.message.includes("Verification token")
+    ) {
+      return res.status(400).json({
         success: false,
         message: error.message,
       });
