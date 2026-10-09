@@ -1,0 +1,38 @@
+$kind: http-request
+name: 2. Login (Auto-Saves Tokens)
+order: 3000
+method: POST
+url: '{{baseUrl}}/api/v1/auth/login'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{email}}",
+      "password": "{{password}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      const jsonData = pm.response.json();
+      pm.test("Login returned tokens", function () {
+          pm.expect(jsonData.success).to.be.true;
+          pm.expect(jsonData.data.tokens).to.have.property("accessToken");
+          pm.expect(jsonData.data.tokens).to.have.property("refreshToken");
+      });
+
+      if (jsonData.data && jsonData.data.tokens) {
+          pm.environment.set("accessToken", jsonData.data.tokens.accessToken);
+          pm.environment.set("refreshToken", jsonData.data.tokens.refreshToken);
+          if (jsonData.data.user && jsonData.data.user.id) {
+              pm.environment.set("userId", jsonData.data.user.id);
+          }
+          console.log("Tokens automatically saved to environment!");
+      }

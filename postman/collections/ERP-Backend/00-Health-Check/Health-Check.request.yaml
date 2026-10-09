@@ -1,0 +1,19 @@
+$kind: http-request
+name: Health Check
+order: 1000
+method: GET
+url: '{{baseUrl}}/health'
+description: Check if the ERP Backend server is running.
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("ERP Backend is healthy", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.success).to.be.true;
+          pm.expect(jsonData.message).to.eql("ERP Backend is running");
+      });

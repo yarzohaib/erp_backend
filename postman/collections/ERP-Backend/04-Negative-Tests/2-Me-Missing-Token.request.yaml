@@ -1,0 +1,20 @@
+$kind: http-request
+name: Get /me without Token (Expect 401)
+order: 13000
+method: GET
+url: '{{baseUrl}}/api/v1/auth/me'
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 401 Unauthorized", function () {
+          pm.response.to.have.status(401);
+      });
+
+      pm.test("Returns token required error", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.success).to.be.false;
+          pm.expect(jsonData.message).to.eql("Authorization token is required");
+      });

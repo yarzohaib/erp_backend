@@ -1,0 +1,26 @@
+$kind: http-request
+name: Refresh with Malformed Token (Expect 401)
+order: 14000
+method: POST
+url: '{{baseUrl}}/api/v1/auth/refresh'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "refreshToken": "invalid.jwt.token"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 401 Unauthorized", function () {
+          pm.response.to.have.status(401);
+      });
+
+      pm.test("Returns invalid refresh token error", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.success).to.be.false;
+      });

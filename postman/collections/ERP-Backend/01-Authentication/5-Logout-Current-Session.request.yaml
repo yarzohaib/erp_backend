@@ -1,0 +1,26 @@
+$kind: http-request
+name: 5. Logout Current Session
+order: 6000
+method: POST
+url: '{{baseUrl}}/api/v1/auth/logout'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "refreshToken": "{{refreshToken}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Logged out successfully", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.success).to.be.true;
+      });

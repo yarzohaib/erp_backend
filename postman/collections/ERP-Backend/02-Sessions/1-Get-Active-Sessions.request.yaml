@@ -1,0 +1,29 @@
+$kind: http-request
+name: 1. Get Active Sessions
+order: 8000
+method: GET
+url: '{{baseUrl}}/api/v1/auth/sessions'
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{accessToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      const jsonData = pm.response.json();
+      pm.test("Sessions retrieved", function () {
+          pm.expect(jsonData.success).to.be.true;
+          pm.expect(jsonData.data.sessions).to.be.an("array");
+      });
+
+      if (jsonData.data && jsonData.data.sessions && jsonData.data.sessions.length > 0) {
+          const activeSession = jsonData.data.sessions.find(s => !s.revokedAt) || jsonData.data.sessions[0];
+          pm.environment.set("sessionId", activeSession.id);
+          console.log("Saved sessionId:", activeSession.id);
+      }

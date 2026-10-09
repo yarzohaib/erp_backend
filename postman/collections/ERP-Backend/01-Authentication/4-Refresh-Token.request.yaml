@@ -1,0 +1,28 @@
+$kind: http-request
+name: 4. Refresh Token (Rotates Tokens)
+order: 5000
+method: POST
+url: '{{baseUrl}}/api/v1/auth/refresh'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "refreshToken": "{{refreshToken}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      const jsonData = pm.response.json();
+      if (jsonData.data) {
+          pm.environment.set("accessToken", jsonData.data.accessToken);
+          pm.environment.set("refreshToken", jsonData.data.refreshToken);
+          console.log("Rotated tokens saved to environment!");
+      }

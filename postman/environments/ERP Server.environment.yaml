@@ -1,0 +1,23 @@
+name: ERP Server
+values:
+  - key: baseUrl
+    value: 'http://localhost:8000'
+  - key: email
+    value: testuser@example.com
+  - key: password
+    value: Password123!
+  - key: firstName
+    value: John
+  - key: lastName
+    value: Doe
+  - key: accessToken
+    value: ''
+  - key: refreshToken
+    value: ''
+  - key: sessionId
+    value: ''
+  - key: resetToken
+    value: ''
+  - key: userId
+    value: ''
+color: 0

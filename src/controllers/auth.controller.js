@@ -5,11 +5,40 @@ const authController = {
     try {
       const { email, password, firstName, lastName } = req.body;
 
+      if (!firstName || !firstName.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "First name is required",
+        });
+      }
+
+      if (!email || !email.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is required",
+        });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid email address",
+        });
+      }
+
+      if (!password || password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 6 characters long",
+        });
+      }
+
       const user = await authService.signup({
-        email,
+        email: email.trim(),
         password,
-        firstName,
-        lastName,
+        firstName: firstName.trim(),
+        lastName: lastName ? lastName.trim() : null,
       });
 
       return res.status(201).json({
@@ -67,8 +96,22 @@ async me(req, res) {
     try {
       const { email, password } = req.body;
 
+      if (!email || !email.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is required",
+        });
+      }
+
+      if (!password) {
+        return res.status(400).json({
+          success: false,
+          message: "Password is required",
+        });
+      }
+
       const result = await authService.login({
-        email,
+        email: email.trim(),
         password,
       });
 
@@ -82,6 +125,13 @@ async me(req, res) {
 
       if (error.message === "Invalid email or password") {
         return res.status(401).json({
+          success: false,
+          message: error.message,
+        });
+      }
+
+      if (error.message === "User account is inactive. Please contact support.") {
+        return res.status(403).json({
           success: false,
           message: error.message,
         });
@@ -268,6 +318,40 @@ async resetPassword(req, res) {
     return res.status(500).json({
       success: false,
       message: "Failed to reset password",
+    });
+  }
+},
+
+async verifyEmail(req, res) {
+  try {
+    const { email } = req.body;
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    await authService.verifyEmail(email.trim());
+
+    return res.status(200).json({
+      success: true,
+      message: "Email verified successfully",
+    });
+  } catch (error) {
+    console.error("VERIFY EMAIL ERROR:", error);
+
+    if (error.message === "User not found") {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify email",
     });
   }
 },

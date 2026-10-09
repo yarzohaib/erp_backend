@@ -1,0 +1,11 @@
+$kind: collection
+name: ERP Backend API
+description: |-
+  Complete API collection for ERP Backend.
+  Covers Health Check, Authentication, Session Management, and Password Reset.
+  Tokens are automatically extracted and saved to environment variables.
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{accessToken}}'

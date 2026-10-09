@@ -28,8 +28,9 @@ function hashResetToken(token) {
 
 const authService = {
   async signup({ email, password, firstName, lastName }) {
+    const normalizedEmail = email.trim().toLowerCase();
     const existingUser = await userRepository.findFirst({
-      email,
+      email: normalizedEmail,
     });
 
     if (existingUser) {
@@ -39,10 +40,10 @@ const authService = {
     const hashedPassword = await argon2.hash(password);
 
     const user = await userRepository.create({
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
-      firstName,
-      lastName,
+      firstName: firstName.trim(),
+      lastName: lastName ? lastName.trim() : null,
     });
 
     return {
@@ -75,12 +76,17 @@ async getCurrentUser(userId) {
 },
 
   async login({ email, password }) {
+  const normalizedEmail = email.trim().toLowerCase();
   const user = await userRepository.findFirst({
-    email,
+    email: normalizedEmail,
   });
 
   if (!user || !user.password) {
     throw new Error("Invalid email or password");
+  }
+
+  if (!user.isActive) {
+    throw new Error("User account is inactive. Please contact support.");
   }
 
   const passwordValid = await argon2.verify(
@@ -273,8 +279,9 @@ async refreshTokens(refreshToken) {
 },
 
 async forgotPassword(email) {
+  const normalizedEmail = email.trim().toLowerCase();
   const user = await userRepository.findFirst({
-    email,
+    email: normalizedEmail,
   });
 
   /*
@@ -293,8 +300,9 @@ async forgotPassword(email) {
 
   const tokenHash = hashResetToken(rawToken);
 
+  // Match the design: 30 minutes expiration
   const expiresAt = Temporal.Instant.fromEpochMilliseconds(
-    Date.now() + 15 * 60 * 1000
+    Date.now() + 30 * 60 * 1000
   );
 
   await passwordResetRepository.create({
@@ -306,7 +314,7 @@ async forgotPassword(email) {
   const resetUrl =
     `${process.env.APP_URL}/api/v1/auth/reset-password?token=${rawToken}`;
 
-  console.log("PASSWORD RESET URL:");
+  console.log("PASSWORD RESET URL (valid for 30 minutes):");
   console.log(resetUrl);
 
   return {
@@ -376,6 +384,23 @@ async resetPassword(token, newPassword) {
 
   return {
     success: true,
+  };
+},
+
+async verifyEmail(email) {
+  const user = await userRepository.findFirst({
+    email,
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  await userRepository.markAsVerified(user.email);
+
+  return {
+    success: true,
+    message: "Email verified successfully",
   };
 },
 };

@@ -32,6 +32,20 @@ const userRepository = {
 
   return db.runtime().execute(query);
 },
+
+  async markAsVerified(email) {
+    const query = db.raw.sql`
+      UPDATE "User"
+      SET
+        "isVerified" = true,
+        "updatedAt" = NOW()
+      WHERE "email" = ${email}
+    `
+      .affectedCount()
+      .build();
+
+    return db.runtime().execute(query);
+  },
 };
 
 module.exports = userRepository;

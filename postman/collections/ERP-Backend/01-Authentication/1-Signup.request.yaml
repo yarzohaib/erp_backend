@@ -1,0 +1,31 @@
+$kind: http-request
+name: 1. Signup User
+order: 2000
+method: POST
+url: '{{baseUrl}}/api/v1/auth/signup'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{email}}",
+      "password": "{{password}}",
+      "firstName": "{{firstName}}",
+      "lastName": "{{lastName}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 201 or 409", function () {
+          pm.expect([201, 409]).to.include(pm.response.code);
+      });
+
+      const jsonData = pm.response.json();
+      if (pm.response.code === 201) {
+          pm.test("User created successfully", function () {
+              pm.expect(jsonData.success).to.be.true;
+          });
+      }
