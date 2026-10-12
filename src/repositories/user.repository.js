@@ -46,6 +46,21 @@ const userRepository = {
 
     return db.runtime().execute(query);
   },
+
+  async clearPasswordAndVerify(userId) {
+    const query = db.raw.sql`
+      UPDATE "User"
+      SET
+        "password" = NULL,
+        "isVerified" = true,
+        "updatedAt" = NOW()
+      WHERE "id" = ${userId}
+    `
+      .affectedCount()
+      .build();
+
+    return db.runtime().execute(query);
+  },
 };
 
 module.exports = userRepository;

@@ -89,6 +89,13 @@ const verifyEmailSchema = z.object({
     .min(1, "Verification token is required"),
 });
 
+const oauthExchangeSchema = z.object({
+  code: z
+    .string({ error: "Code is required" })
+    .trim()
+    .min(1, "Code is required"),
+});
+
 module.exports = {
   passwordSchema,
   newPasswordSchema,
@@ -99,4 +106,5 @@ module.exports = {
   resetPasswordSchema,
   requestVerificationSchema,
   verifyEmailSchema,
+  oauthExchangeSchema,
 };

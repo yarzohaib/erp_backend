@@ -110,10 +110,16 @@ async me(req, res) {
         });
       }
 
-      const result = await authService.login({
-        email: email.trim(),
-        password,
-      });
+      const result = await authService.login(
+        {
+          email: email.trim(),
+          password,
+        },
+        {
+          userAgent: req.headers["user-agent"],
+          ipAddress: req.ip,
+        }
+      );
 
       return res.status(200).json({
         success: true,

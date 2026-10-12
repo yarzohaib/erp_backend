@@ -1,6 +1,7 @@
 const express = require("express");
 
 const authController = require("../controllers/auth.controller");
+const oauthController = require("../controllers/oauth.controller");
 const { authenticate } = require("../middleware/auth.middleware");
 const { validate } = require("../middleware/validate.middleware");
 const {
@@ -10,9 +11,23 @@ const {
   resetPasswordSchema,
   requestVerificationSchema,
   verifyEmailSchema,
+  oauthExchangeSchema,
 } = require("../validators/auth.validator");
 
 const router = express.Router();
+
+// OAuth Routes
+router.get("/google", oauthController.googleAuth);
+router.get("/google/callback", oauthController.googleCallback);
+
+router.get("/github", oauthController.githubAuth);
+router.get("/github/callback", oauthController.githubCallback);
+
+router.post(
+  "/oauth/exchange",
+  validate(oauthExchangeSchema),
+  oauthController.oauthExchange
+);
 
 router.post("/signup", validate(signupSchema), authController.signup);
 

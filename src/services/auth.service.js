@@ -35,6 +35,38 @@ function hashVerificationToken(token) {
     .digest("hex");
 }
 
+async function issueUserSession(user, { userAgent, ipAddress } = {}) {
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+
+  const refreshTokenHash = hashRefreshToken(refreshToken);
+
+  const expiresAt = Temporal.Instant.fromEpochMilliseconds(
+    Date.now() + 7 * 24 * 60 * 60 * 1000
+  );
+
+  await sessionRepository.create({
+    userId: user.id,
+    refreshTokenHash,
+    expiresAt,
+    userAgent: userAgent || null,
+    ipAddress: ipAddress || null,
+  });
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    },
+    tokens: {
+      accessToken,
+      refreshToken,
+    },
+  };
+}
+
 const authService = {
   async signup({ email, password, firstName, lastName }) {
     const normalizedEmail = email.trim().toLowerCase();
@@ -84,55 +116,32 @@ async getCurrentUser(userId) {
   };
 },
 
-  async login({ email, password }) {
-  const normalizedEmail = email.trim().toLowerCase();
-  const user = await userRepository.findFirst({
-    email: normalizedEmail,
-  });
+  issueUserSession,
 
-  if (!user || !user.password) {
-    throw new Error("Invalid email or password");
-  }
+  async login({ email, password }, context = {}) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await userRepository.findFirst({
+      email: normalizedEmail,
+    });
 
-  if (!user.isActive) {
-    throw new Error("User account is inactive. Please contact support.");
-  }
+    if (!user || !user.password) {
+      throw new Error("Invalid email or password");
+    }
 
-  const passwordValid = await argon2.verify(
-    user.password,
-    password
-  );
+    if (!user.isActive) {
+      throw new Error("User account is inactive. Please contact support.");
+    }
 
-  if (!passwordValid) {
-    throw new Error("Invalid email or password");
-  }
+    const passwordValid = await argon2.verify(
+      user.password,
+      password
+    );
 
-  const accessToken = generateAccessToken(user);
-  const refreshToken = generateRefreshToken(user);
+    if (!passwordValid) {
+      throw new Error("Invalid email or password");
+    }
 
-  const refreshTokenHash = hashRefreshToken(refreshToken);
-
-  const expiresAt = Temporal.Instant.fromEpochMilliseconds(
-  Date.now() + 7 * 24 * 60 * 60 * 1000
-);
-  await sessionRepository.create({
-    userId: user.id,
-    refreshTokenHash,
-    expiresAt,
-  });
-
-  return {
-    user: {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-    },
-    tokens: {
-      accessToken,
-      refreshToken,
-    },
-  };
+    return issueUserSession(user, context);
   },
 
 async logout(refreshToken) {
@@ -320,8 +329,8 @@ async forgotPassword(email) {
     expiresAt,
   });
 
-  const resetUrl =
-    `${process.env.APP_URL}/api/v1/auth/reset-password?token=${rawToken}`;
+  const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+  const resetUrl = `${frontendBase}/reset?token=${rawToken}`;
 
   console.log("PASSWORD RESET URL (valid for 30 minutes):");
   console.log(resetUrl);
@@ -431,7 +440,8 @@ async requestEmailVerification(email) {
     expiresAt,
   });
 
-  const verifyUrl = `${process.env.APP_URL || "http://localhost:3000"}/verify?token=${rawToken}&email=${encodeURIComponent(user.email)}`;
+  const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+  const verifyUrl = `${frontendBase}/verify?token=${rawToken}&email=${encodeURIComponent(user.email)}`;
 
   console.log("EMAIL VERIFICATION URL (valid for 24 hours):");
   console.log(verifyUrl);

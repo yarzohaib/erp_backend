@@ -13,8 +13,10 @@ model User {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @default(now())
 
-  sessions   Session[]
+  sessions            Session[]
   passwordResetTokens PasswordResetToken[]
+  oauthAccounts       OAuthAccount[]
+  oauthLoginCodes     OAuthLoginCode[]
 }
 
 model Session {
@@ -39,7 +41,6 @@ model Session {
   @@index([expiresAt])
 }
 
-
 model PasswordResetToken {
   id        String   @id @default(uuid())
   userId    String
@@ -55,5 +56,39 @@ model PasswordResetToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt])
+}
+
+model OAuthAccount {
+  id                String   @id @default(uuid())
+  userId            String
+
+  provider          String
+  providerAccountId String
+  email             String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now())
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model OAuthLoginCode {
+  id        String    @id @default(uuid())
+  userId    String
+
+  codeHash  String    @unique
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([expiresAt])
 }
