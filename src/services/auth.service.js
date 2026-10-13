@@ -13,6 +13,10 @@ const sessionRepository = require("../repositories/session.repository");
 const userRepository = require("../repositories/user.repository");
 
 const emailVerificationRepository = require("../repositories/email-verification.repository");
+const mailService = require("./mail.service");
+
+const RESET_TOKEN_TTL_MINUTES = 30;
+const VERIFICATION_TOKEN_TTL_HOURS = 24;
 
 function hashRefreshToken(token) {
   return crypto
@@ -33,6 +37,15 @@ function hashVerificationToken(token) {
     .createHash("sha256")
     .update(token)
     .digest("hex");
+}
+
+function isTokenExpired(expiresAt) {
+  if (!expiresAt) return true;
+  if (expiresAt instanceof Temporal.Instant) {
+    return Temporal.Instant.compare(expiresAt, Temporal.Now.instant()) <= 0;
+  }
+  const time = new Date(expiresAt).getTime();
+  return isNaN(time) || time <= Date.now();
 }
 
 async function issueUserSession(user, { userAgent, ipAddress } = {}) {
@@ -87,6 +100,39 @@ const authService = {
       lastName: lastName ? lastName.trim() : null,
     });
 
+    // Generate verification token (24-hour expiration)
+    try {
+      const rawToken = crypto.randomBytes(32).toString("hex");
+      const tokenHash = hashVerificationToken(rawToken);
+
+      const expiresAt = Temporal.Instant.fromEpochMilliseconds(
+        Date.now() + VERIFICATION_TOKEN_TTL_HOURS * 60 * 60 * 1000
+      );
+
+      await emailVerificationRepository.create({
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+      });
+
+      const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+      const verificationUrl = `${frontendBase}/verify?token=${rawToken}`;
+
+      // Send verification email unawaited; signup must not fail if sending fails
+      mailService
+        .sendVerificationEmail({
+          to: user.email,
+          firstName: user.firstName,
+          actionUrl: verificationUrl,
+          expiresIn: `${VERIFICATION_TOKEN_TTL_HOURS} hours`,
+        })
+        .catch((err) => {
+          console.error("[Auth Service] Failed to send verification email on signup:", err.message || err);
+        });
+    } catch (err) {
+      console.error("[Auth Service] Failed to create verification token on signup:", err.message || err);
+    }
+
     return {
       id: user.id,
       email: user.email,
@@ -139,6 +185,10 @@ async getCurrentUser(userId) {
 
     if (!passwordValid) {
       throw new Error("Invalid email or password");
+    }
+
+    if (!user.isVerified) {
+      throw new Error("Please verify your email address before logging in.");
     }
 
     return issueUserSession(user, context);
@@ -273,6 +323,10 @@ async refreshTokens(refreshToken) {
     throw new Error("User is inactive or does not exist");
   }
 
+  if (!user.isVerified) {
+    throw new Error("Please verify your email address before continuing.");
+  }
+
   await sessionRepository.revokeById(session.id);
 
   const newAccessToken = generateAccessToken(user);
@@ -296,199 +350,246 @@ async refreshTokens(refreshToken) {
   };
 },
 
-async forgotPassword(email) {
-  const normalizedEmail = email.trim().toLowerCase();
-  const user = await userRepository.findFirst({
-    email: normalizedEmail,
-  });
+  async forgotPassword(email) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await userRepository.findFirst({
+      email: normalizedEmail,
+    });
 
-  /*
-   * Always return success here.
-   *
-   * This prevents attackers from discovering
-   * which email addresses have accounts.
-   */
-  if (!user) {
+    /*
+     * Always return success here.
+     * This prevents attackers from discovering
+     * which email addresses have accounts.
+     */
+    if (!user) {
+      return {
+        success: true,
+      };
+    }
+
+    // Invalidate older unused reset tokens for this user
+    await passwordResetRepository.invalidateAllUnusedForUser(user.id);
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = hashResetToken(rawToken);
+
+    // Shared 30-minute expiration
+    const expiresAt = Temporal.Instant.fromEpochMilliseconds(
+      Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000
+    );
+
+    await passwordResetRepository.create({
+      userId: user.id,
+      tokenHash,
+      expiresAt,
+    });
+
+    const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+    const resetUrl = `${frontendBase}/reset?token=${rawToken}`;
+
+    // Send email unawaited, never log the link or token
+    mailService
+      .sendPasswordResetEmail({
+        to: user.email,
+        firstName: user.firstName,
+        actionUrl: resetUrl,
+        expiresIn: `${RESET_TOKEN_TTL_MINUTES} minutes`,
+      })
+      .catch((err) => {
+        console.error("[Auth Service] Failed to send password reset email:", err);
+      });
+
     return {
       success: true,
     };
-  }
+  },
 
-  const rawToken = crypto.randomBytes(32).toString("hex");
+  async resetPassword(token, newPassword) {
+    if (!token) {
+      throw new Error("Invalid or expired reset token");
+    }
 
-  const tokenHash = hashResetToken(rawToken);
+    if (!newPassword) {
+      throw new Error("New password is required");
+    }
 
-  // Match the design: 30 minutes expiration
-  const expiresAt = Temporal.Instant.fromEpochMilliseconds(
-    Date.now() + 30 * 60 * 1000
-  );
+    const tokenHash = hashResetToken(token.trim());
 
-  await passwordResetRepository.create({
-    userId: user.id,
-    tokenHash,
-    expiresAt,
-  });
+    const resetToken =
+      await passwordResetRepository.findByTokenHash(tokenHash);
 
-  const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
-  const resetUrl = `${frontendBase}/reset?token=${rawToken}`;
+    if (!resetToken) {
+      console.warn("[Auth Service] Reset token record not found for submitted token");
+      throw new Error("Invalid or expired reset token");
+    }
 
-  console.log("PASSWORD RESET URL (valid for 30 minutes):");
-  console.log(resetUrl);
+    if (resetToken.usedAt) {
+      console.warn(`[Auth Service] Reset token was already used at: ${resetToken.usedAt}`);
+      throw new Error("Invalid or expired reset token");
+    }
 
-  return {
-    success: true,
-  };
-},
+    if (isTokenExpired(resetToken.expiresAt)) {
+      console.warn(`[Auth Service] Reset token expired (expiresAt: ${resetToken.expiresAt})`);
+      throw new Error("Invalid or expired reset token");
+    }
 
-async resetPassword(token, newPassword) {
-  if (!token) {
-    throw new Error("Reset token is required");
-  }
+    const user = await userRepository.findFirst({
+      id: resetToken.userId,
+    });
 
-  if (!newPassword) {
-    throw new Error("New password is required");
-  }
+    if (!user || !user.isActive) {
+      console.warn("[Auth Service] User account not found or inactive for reset token");
+      throw new Error("Invalid or expired reset token");
+    }
 
-  const tokenHash = hashResetToken(token);
+    // Fix race condition: mark the token as used FIRST using conditional update (usedAt IS NULL)
+    // and verify that affected count is exactly 1 before updating the password
+    const rawAffectedCount = await passwordResetRepository.markAsUsed(
+      resetToken.id
+    );
+    const affectedCount = typeof rawAffectedCount === "number"
+      ? rawAffectedCount
+      : (rawAffectedCount?.affectedRows ?? rawAffectedCount?.rowCount ?? 0);
 
-  const resetToken =
-    await passwordResetRepository.findByTokenHash(tokenHash);
+    if (affectedCount !== 1) {
+      console.warn(`[Auth Service] markAsUsed returned affectedCount ${affectedCount} (expected 1)`);
+      throw new Error("Invalid or expired reset token");
+    }
 
-  if (!resetToken) {
-    throw new Error("Invalid or expired reset token");
-  }
+    const passwordHash = await argon2.hash(newPassword);
 
-  if (resetToken.usedAt) {
-    throw new Error("Invalid or expired reset token");
-  }
+    await userRepository.updatePassword(
+      user.id,
+      passwordHash
+    );
 
-  const now = Temporal.Now.instant();
+    /*
+     * Password change invalidates all existing
+     * refresh-token sessions.
+     */
+    await sessionRepository.revokeAllByUserId(
+      user.id
+    );
 
-  if (
-    Temporal.Instant.compare(
-      Temporal.Instant.from(resetToken.expiresAt),
-      now
-    ) <= 0
-  ) {
-    throw new Error("Invalid or expired reset token");
-  }
-
-  const user = await userRepository.findFirst({
-    id: resetToken.userId,
-  });
-
-  if (!user || !user.isActive) {
-    throw new Error("Invalid or expired reset token");
-  }
-
-  const passwordHash = await argon2.hash(newPassword);
-
-  await userRepository.updatePassword(
-    user.id,
-    passwordHash
-  );
-
-  await passwordResetRepository.markAsUsed(
-    resetToken.id
-  );
-
-  /*
-   * Password change invalidates all existing
-   * refresh-token sessions.
-   */
-  await sessionRepository.revokeAllByUserId(
-    user.id
-  );
-
-  return {
-    success: true,
-  };
-},
-
-async requestEmailVerification(email) {
-  const normalizedEmail = email.trim().toLowerCase();
-  const user = await userRepository.findFirst({
-    email: normalizedEmail,
-  });
-
-  if (!user) {
     return {
+      success: true,
+    };
+  },
+
+  async requestEmailVerification(email) {
+    const genericResponse = {
       success: true,
       message:
         "If an account exists for this email, a verification link has been generated",
     };
-  }
 
-  if (user.isVerified) {
+    if (!email) {
+      return genericResponse;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await userRepository.findFirst({
+      email: normalizedEmail,
+    });
+
+    // Always return generic response whether or not user exists
+    if (!user) {
+      return genericResponse;
+    }
+
+    // If user is already verified, do nothing and return generic response
+    if (user.isVerified) {
+      return genericResponse;
+    }
+
+    // Invalidate older unused verification tokens for this user
+    await emailVerificationRepository.invalidateAllUnusedForUser(user.id);
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = hashVerificationToken(rawToken);
+
+    // 24 hours expiration
+    const expiresAt = Temporal.Instant.fromEpochMilliseconds(
+      Date.now() + VERIFICATION_TOKEN_TTL_HOURS * 60 * 60 * 1000
+    );
+
+    await emailVerificationRepository.create({
+      userId: user.id,
+      tokenHash,
+      expiresAt,
+    });
+
+    const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+    const verificationUrl = `${frontendBase}/verify?token=${rawToken}`;
+
+    // Send email unawaited, never log token or link
+    mailService
+      .sendVerificationEmail({
+        to: user.email,
+        firstName: user.firstName,
+        actionUrl: verificationUrl,
+        expiresIn: `${VERIFICATION_TOKEN_TTL_HOURS} hours`,
+      })
+      .catch((err) => {
+        console.error("[Auth Service] Failed to send verification email on request:", err);
+      });
+
+    return genericResponse;
+  },
+
+  async verifyEmailToken(token) {
+    const INVALID_TOKEN_MESSAGE = "Invalid or expired verification token";
+
+    if (!token) {
+      throw new Error(INVALID_TOKEN_MESSAGE);
+    }
+
+    const tokenHash = hashVerificationToken(token.trim());
+    const record = await emailVerificationRepository.findByTokenHash(tokenHash);
+
+    if (!record) {
+      console.warn("[Auth Service] Email verification token record not found");
+      throw new Error(INVALID_TOKEN_MESSAGE);
+    }
+
+    if (record.usedAt) {
+      console.warn(`[Auth Service] Email verification token already used at ${record.usedAt}`);
+      throw new Error(INVALID_TOKEN_MESSAGE);
+    }
+
+    if (isTokenExpired(record.expiresAt)) {
+      console.warn(`[Auth Service] Email verification token expired (expiresAt: ${record.expiresAt})`);
+      throw new Error(INVALID_TOKEN_MESSAGE);
+    }
+
+    const user = await userRepository.findFirst({
+      id: record.userId,
+    });
+
+    if (!user) {
+      console.warn("[Auth Service] User not found for verification token");
+      throw new Error(INVALID_TOKEN_MESSAGE);
+    }
+
+    // Mark as used atomically FIRST and check that affected count is 1
+    const rawAffectedCount = await emailVerificationRepository.markAsUsed(record.id);
+    const affectedCount = typeof rawAffectedCount === "number"
+      ? rawAffectedCount
+      : (rawAffectedCount?.affectedRows ?? rawAffectedCount?.rowCount ?? 0);
+
+    if (affectedCount !== 1) {
+      console.warn(`[Auth Service] markAsUsed returned affectedCount ${affectedCount} (expected 1)`);
+      throw new Error(INVALID_TOKEN_MESSAGE);
+    }
+
+    // Set User.isVerified to true
+    await userRepository.markAsVerified(user.email);
+
     return {
       success: true,
-      message: "This email address is already verified.",
+      message: "Email verified successfully",
     };
-  }
-
-  await emailVerificationRepository.deletePendingByUserId(user.id);
-
-  const rawToken = crypto.randomBytes(32).toString("hex");
-  const tokenHash = hashVerificationToken(rawToken);
-
-  // 24 hours expiration matching the email design
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-  await emailVerificationRepository.create({
-    userId: user.id,
-    tokenHash,
-    expiresAt,
-  });
-
-  const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
-  const verifyUrl = `${frontendBase}/verify?token=${rawToken}&email=${encodeURIComponent(user.email)}`;
-
-  console.log("EMAIL VERIFICATION URL (valid for 24 hours):");
-  console.log(verifyUrl);
-
-  return {
-    success: true,
-    message:
-      "If an account exists for this email, a verification link has been generated",
-  };
-},
-
-async verifyEmailToken(token) {
-  if (!token) {
-    throw new Error("Verification token is required");
-  }
-
-  const tokenHash = hashVerificationToken(token.trim());
-  const record = await emailVerificationRepository.findByTokenHash(tokenHash);
-
-  if (!record) {
-    throw new Error("Invalid or expired verification token");
-  }
-
-  if (record.usedAt) {
-    throw new Error("Verification token has already been used");
-  }
-
-  if (new Date(record.expiresAt).getTime() <= Date.now()) {
-    throw new Error("Verification token has expired. Please request a new verification link.");
-  }
-
-  const user = await userRepository.findFirst({
-    id: record.userId,
-  });
-
-  if (!user) {
-    throw new Error("User associated with this token not found");
-  }
-
-  await userRepository.markAsVerified(user.email);
-  await emailVerificationRepository.markAsUsed(record.id);
-
-  return {
-    success: true,
-    message: "Email verified successfully",
-  };
-},
+  },
 };
 
 module.exports = authService;

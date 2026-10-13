@@ -136,7 +136,10 @@ async me(req, res) {
         });
       }
 
-      if (error.message === "User account is inactive. Please contact support.") {
+      if (
+        error.message === "Please verify your email address before logging in." ||
+        error.message === "User account is inactive. Please contact support."
+      ) {
         return res.status(403).json({
           success: false,
           message: error.message,

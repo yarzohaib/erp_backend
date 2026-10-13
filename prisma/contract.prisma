@@ -15,6 +15,7 @@ model User {
 
   sessions            Session[]
   passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
   oauthAccounts       OAuthAccount[]
   oauthLoginCodes     OAuthLoginCode[]
 }
@@ -90,5 +91,23 @@ model OAuthLoginCode {
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([expiresAt])
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid())
+  userId    String
+
+  tokenHash String    @unique
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
   @@index([expiresAt])
 }

@@ -1,0 +1,194 @@
+require("dotenv").config();
+const fs = require('fs');
+const path = require('path');
+const { SESv2Client, SendEmailCommand } = require('@aws-sdk/client-sesv2');
+
+// Initialize SESv2 client using default AWS credential provider chain
+// Uses IAM role on EC2 server and local AWS credentials/profile on dev machine
+function getSesClient() {
+  return new SESv2Client({
+    region: process.env.AWS_REGION || 'ap-southeast-2',
+  });
+}
+
+const TEMPLATES_DIR = path.join(__dirname, '..', 'templates', 'emails');
+
+// Template cache
+const templates = {
+  emailVerification: null,
+  passwordReset: null,
+};
+
+function getTemplate(name, filename) {
+  if (process.env.NODE_ENV !== 'production' || !templates[name]) {
+    const filePath = path.join(TEMPLATES_DIR, filename);
+    templates[name] = fs.readFileSync(filePath, 'utf8');
+  }
+  return templates[name];
+}
+
+/**
+ * Escapes HTML characters in user input to prevent HTML injection in emails
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Replaces {{placeholder}} tokens in email templates
+ */
+function renderTemplate(templateContent, variables = {}) {
+  let output = templateContent;
+  for (const [key, value] of Object.entries(variables)) {
+    const formattedValue = key === 'firstName' ? escapeHtml(value) : String(value ?? '');
+    const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+    output = output.replace(placeholder, formattedValue);
+  }
+  return output;
+}
+
+/**
+ * Ensures FromEmailAddress is a clean, valid RFC 5322 email address.
+ * Automatically extracts the clean email if accidental display names or spaces were included in .env
+ */
+function cleanFromAddress(from) {
+  if (!from) return '';
+  const trimmed = from.trim();
+  const match = trimmed.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  return match ? match[1] : trimmed;
+}
+
+/**
+ * Generic email sending function
+ * @param {Object} options
+ * @param {string} options.to - Recipient email address
+ * @param {string} options.subject - Subject line
+ * @param {string} options.html - HTML body
+ * @param {string} options.text - Plain text body
+ */
+async function sendEmail({ to, subject, html, text }) {
+  if (process.env.MAIL_ENABLED !== 'true') {
+    // Only log recipient and subject, never tokens or links
+    console.log(`[Mail Service] Email suppressed (MAIL_ENABLED is not "true"). Recipient: ${to}, Subject: "${subject}"`);
+    return { success: false, suppressed: true };
+  }
+
+  const fromAddress = cleanFromAddress(process.env.MAIL_FROM);
+
+  const command = new SendEmailCommand({
+    FromEmailAddress: fromAddress,
+    Destination: {
+      ToAddresses: [to],
+    },
+    Content: {
+      Simple: {
+        Subject: {
+          Data: subject,
+          Charset: 'UTF-8',
+        },
+        Body: {
+          Html: {
+            Data: html,
+            Charset: 'UTF-8',
+          },
+          Text: {
+            Data: text,
+            Charset: 'UTF-8',
+          },
+        },
+      },
+    },
+  });
+
+  try {
+    const sesClient = getSesClient();
+    const response = await sesClient.send(command);
+    console.log(`[Mail Service] Email sent successfully via Amazon SES. Recipient: ${to}, MessageId: ${response.MessageId}`);
+    return { success: true, messageId: response.MessageId };
+  } catch (err) {
+    console.error(`[Mail Service] AWS SES Error sending to ${to}: [${err.name || 'Error'}] ${err.message}`);
+    throw err;
+  }
+}
+
+/**
+ * Sends a password reset email with both HTML and plain-text body
+ */
+async function sendPasswordResetEmail({ to, firstName, actionUrl, expiresIn = '30 minutes' }) {
+  const greetingName = firstName || 'there';
+  const rawHtml = getTemplate('passwordReset', 'pass_reset.html');
+  const html = renderTemplate(rawHtml, {
+    firstName: greetingName,
+    actionUrl,
+    expiresIn,
+  });
+
+  const text = [
+    `Hi ${greetingName},`,
+    '',
+    'Need a new password? Use the link below to securely reset your password and regain access to your Sig Signature account:',
+    '',
+    actionUrl,
+    '',
+    `This password reset link will expire in ${expiresIn}.`,
+    '',
+    "If you didn't request this password reset, you can safely ignore this email. Your account will remain secure.",
+    '',
+    '© 2026 Sig Signature. All rights reserved.',
+  ].join('\n');
+
+  return sendEmail({
+    to,
+    subject: 'Reset your Sig Signature password',
+    html,
+    text,
+  });
+}
+
+/**
+ * Sends an email verification email with both HTML and plain-text body
+ */
+async function sendVerificationEmail({ to, firstName, actionUrl, expiresIn = '24 hours' }) {
+  const greetingName = firstName || 'there';
+  const rawHtml = getTemplate('emailVerification', 'email_verification.html');
+  const html = renderTemplate(rawHtml, {
+    firstName: greetingName,
+    actionUrl,
+    expiresIn,
+  });
+
+  const text = [
+    `Hi ${greetingName},`,
+    '',
+    'Please verify your email address to activate your account and start creating professional email signatures:',
+    '',
+    actionUrl,
+    '',
+    `This verification link will expire in ${expiresIn}.`,
+    '',
+    "If you didn't create a Sig Signature account, you can safely ignore this email.",
+    '',
+    '© 2026 Sig Signature. All rights reserved.',
+  ].join('\n');
+
+  return sendEmail({
+    to,
+    subject: 'Confirm your Sig Signature email address',
+    html,
+    text,
+  });
+}
+
+module.exports = {
+  sendEmail,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+  escapeHtml,
+  renderTemplate,
+};
