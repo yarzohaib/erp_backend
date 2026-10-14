@@ -99,6 +99,17 @@ const generalAuthLimiter = createRateLimiter({
   message: "Too many requests to authentication service. Please slow down.",
 });
 
+// 6. Upload presign limiter: 30 requests per user per hour
+const uploadPresignLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 30,
+  message: "Too many upload requests. You may only request up to 30 upload URLs per hour.",
+  keyGenerator: (req) => {
+    const userId = req.user?.id || req.user?.sub;
+    return userId ? `user:${userId}` : req.ip || "unknown";
+  },
+});
+
 module.exports = {
   createRateLimiter,
   loginLimiter,
@@ -106,4 +117,5 @@ module.exports = {
   forgotPasswordLimiter,
   resendVerificationLimiter,
   generalAuthLimiter,
+  uploadPresignLimiter,
 };

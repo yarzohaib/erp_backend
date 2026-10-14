@@ -19,6 +19,8 @@ const envSchema = z.object({
   BACKEND_URL: z.string().optional(),
   
   AWS_REGION: z.string().default("ap-southeast-2"),
+  S3_BUCKET: z.string().optional(),
+  S3_PUBLIC_BASE_URL: z.string().optional(),
   MAIL_ENABLED: z.string().default("false"),
   MAIL_FROM: z.string().optional(),
 });

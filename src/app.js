@@ -3,6 +3,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const authRoutes = require("./routes/auth.routes");
+const uploadRoutes = require("./routes/upload.routes");
 const errorHandler = require("./middleware/errorHandler.middleware");
 
 const app = express();
@@ -22,6 +23,7 @@ app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(cookieParser());
 
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/uploads", uploadRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({
