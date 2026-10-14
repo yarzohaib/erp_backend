@@ -1,22 +1,40 @@
 const argon2 = require("argon2");
-const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const { Temporal } = require("@js-temporal/polyfill");
-const passwordResetRepository = require("../repositories/password-reset.repository");
+
+const {
+  BadRequestError,
+  UnauthorizedError,
+  ForbiddenError,
+  ConflictError,
+  NotFoundError,
+} = require("../utils/errors");
+
 const {
   generateAccessToken,
   generateRefreshToken,
   verifyRefreshToken,
 } = require("../utils/jwt");
-const crypto = require("crypto");
+
+const passwordResetRepository = require("../repositories/password-reset.repository");
 const sessionRepository = require("../repositories/session.repository");
-
 const userRepository = require("../repositories/user.repository");
-
 const emailVerificationRepository = require("../repositories/email-verification.repository");
 const mailService = require("./mail.service");
 
 const RESET_TOKEN_TTL_MINUTES = 30;
 const VERIFICATION_TOKEN_TTL_HOURS = 24;
+
+const SESSION_TTL_DAYS = parseInt(process.env.SESSION_TTL_DAYS || "7", 10);
+const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+
+// Pre-computed fallback Argon2 hash for timing attack mitigation during login
+let DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQxMjM0NTY3OA$90l0lC8b+s2iA6g9v7k+P7pQ2t7y8u9w0a1b2c3d4e5";
+(async () => {
+  try {
+    DUMMY_HASH = await argon2.hash("sigsignature-dummy-password-timing-mitigation");
+  } catch (_) {}
+})();
 
 function hashRefreshToken(token) {
   return crypto
@@ -48,14 +66,14 @@ function isTokenExpired(expiresAt) {
   return isNaN(time) || time <= Date.now();
 }
 
-async function issueUserSession(user, { userAgent, ipAddress } = {}) {
+async function issueUserSession(user, { userAgent, ipAddress, deviceName } = {}) {
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
 
   const refreshTokenHash = hashRefreshToken(refreshToken);
 
   const expiresAt = Temporal.Instant.fromEpochMilliseconds(
-    Date.now() + 7 * 24 * 60 * 60 * 1000
+    Date.now() + SESSION_TTL_MS
   );
 
   await sessionRepository.create({
@@ -64,6 +82,7 @@ async function issueUserSession(user, { userAgent, ipAddress } = {}) {
     expiresAt,
     userAgent: userAgent || null,
     ipAddress: ipAddress || null,
+    deviceName: deviceName || null,
   });
 
   return {
@@ -88,7 +107,7 @@ const authService = {
     });
 
     if (existingUser) {
-      throw new Error("User already exists");
+      throw new ConflictError("User already exists with this email address");
     }
 
     const hashedPassword = await argon2.hash(password);
@@ -98,6 +117,7 @@ const authService = {
       password: hashedPassword,
       firstName: firstName.trim(),
       lastName: lastName ? lastName.trim() : null,
+      isVerified: false,
     });
 
     // Generate verification token (24-hour expiration)
@@ -141,214 +161,217 @@ const authService = {
     };
   },
 
-async getCurrentUser(userId) {
-  const user = await userRepository.findFirst({
-    id: userId,
-  });
+  async getCurrentUser(userId) {
+    const user = await userRepository.findFirst({
+      id: userId,
+    });
 
-  if (!user) {
-    return null;
-  }
+    if (!user) {
+      return null;
+    }
 
-  return {
-    id: user.id,
-    email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    isActive: user.isActive,
-    isVerified: user.isVerified,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
-  };
-},
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      isActive: user.isActive,
+      isVerified: user.isVerified,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  },
 
   issueUserSession,
 
+  /**
+   * Login with timing attack mitigation:
+   * Runs Argon2 verification regardless of whether the account exists,
+   * eliminating timing leaks that reveal registered email addresses.
+   */
   async login({ email, password }, context = {}) {
     const normalizedEmail = email.trim().toLowerCase();
     const user = await userRepository.findFirst({
       email: normalizedEmail,
     });
 
-    if (!user || !user.password) {
-      throw new Error("Invalid email or password");
+    // Timing attack mitigation: verify against dummy hash if user or password is missing
+    const hashToVerify = user && user.password ? user.password : DUMMY_HASH;
+    const passwordValid = await argon2.verify(hashToVerify, password).catch(() => false);
+
+    if (!user || !user.password || !passwordValid) {
+      throw new UnauthorizedError("Invalid email or password");
     }
 
     if (!user.isActive) {
-      throw new Error("User account is inactive. Please contact support.");
-    }
-
-    const passwordValid = await argon2.verify(
-      user.password,
-      password
-    );
-
-    if (!passwordValid) {
-      throw new Error("Invalid email or password");
+      throw new ForbiddenError("User account is inactive. Please contact support.");
     }
 
     if (!user.isVerified) {
-      throw new Error("Please verify your email address before logging in.");
+      throw new ForbiddenError("Please verify your email address before logging in.", "EMAIL_NOT_VERIFIED");
     }
 
     return issueUserSession(user, context);
   },
 
-async logout(refreshToken) {
-  if (!refreshToken) {
-    throw new Error("Refresh token is required");
-  }
+  async logout(refreshToken) {
+    if (!refreshToken) {
+      throw new BadRequestError("Refresh token is required");
+    }
 
-  let payload;
+    let payload;
+    try {
+      payload = verifyRefreshToken(refreshToken);
+    } catch (_) {
+      throw new UnauthorizedError("Invalid refresh token");
+    }
 
-  try {
-    payload = verifyRefreshToken(refreshToken);
-  } catch (error) {
-    throw new Error("Invalid refresh token");
-  }
+    if (payload.type !== "refresh") {
+      throw new UnauthorizedError("Invalid refresh token");
+    }
 
-  if (payload.type !== "refresh") {
-    throw new Error("Invalid refresh token");
-  }
+    const refreshTokenHash = hashRefreshToken(refreshToken);
+    const session = await sessionRepository.findByRefreshTokenHash(refreshTokenHash);
 
-  const refreshTokenHash = hashRefreshToken(refreshToken);
+    if (!session) {
+      throw new NotFoundError("Session not found");
+    }
 
-  const session = await sessionRepository.findByRefreshTokenHash(
-    refreshTokenHash
-  );
+    if (!session.revokedAt) {
+      await sessionRepository.revokeById(session.id);
+    }
 
-  if (!session) {
-    throw new Error("Session not found");
-  }
+    return { success: true };
+  },
 
-  if (!session.revokedAt) {
-    await sessionRepository.revokeById(session.id);
-  }
+  async logoutAll(userId) {
+    await sessionRepository.revokeAllByUserId(userId);
+    return { success: true };
+  },
 
-  return {
-    success: true,
-  };
-},
+  async getSessions(userId) {
+    const sessions = await sessionRepository.findByUserId(userId);
+    return sessions.map((session) => ({
+      id: session.id,
+      userId: session.userId,
+      deviceName: session.deviceName,
+      userAgent: session.userAgent,
+      ipAddress: session.ipAddress,
+      expiresAt: session.expiresAt,
+      revokedAt: session.revokedAt,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    }));
+  },
 
-async logoutAll(userId) {
-  await sessionRepository.revokeAllByUserId(userId);
+  async revokeSession(userId, sessionId) {
+    const session = await sessionRepository.findById(sessionId);
 
-  return {
-    success: true,
-  };
-},
+    if (!session || session.userId !== userId) {
+      throw new NotFoundError("Session not found");
+    }
 
-async getSessions(userId) {
-  const sessions = await sessionRepository.findByUserId(userId);
+    if (!session.revokedAt) {
+      await sessionRepository.revokeById(session.id);
+    }
 
-  return sessions.map((session) => ({
-    id: session.id,
-    userId: session.userId,
-    deviceName: session.deviceName,
-    userAgent: session.userAgent,
-    ipAddress: session.ipAddress,
-    expiresAt: session.expiresAt,
-    revokedAt: session.revokedAt,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
-  }));
-},
+    return { success: true };
+  },
 
-async revokeSession(userId, sessionId) {
-  const session = await sessionRepository.findById(sessionId);
+  /**
+   * Refresh tokens with:
+   * 1. Automatic reuse / theft detection (revokes ALL sessions if revoked token is used)
+   * 2. Atomic session rotation (prevents race conditions)
+   * 3. Preservation and updating of userAgent and ipAddress metadata
+   * 4. Configurable session TTL
+   */
+  async refreshTokens(refreshToken, { userAgent, ipAddress } = {}) {
+    if (!refreshToken) {
+      throw new BadRequestError("Refresh token is required");
+    }
 
-  if (!session) {
-    throw new Error("Session not found");
-  }
+    let payload;
+    try {
+      payload = verifyRefreshToken(refreshToken);
+    } catch (error) {
+      console.warn("[Auth Service] Refresh token verification failed:", error.message);
+      throw new UnauthorizedError("Invalid refresh token");
+    }
 
-  if (session.userId !== userId) {
-    throw new Error("Session not found");
-  }
+    if (payload.type !== "refresh") {
+      throw new UnauthorizedError("Invalid refresh token");
+    }
 
-  if (!session.revokedAt) {
-    await sessionRepository.revokeById(session.id);
-  }
+    const refreshTokenHash = hashRefreshToken(refreshToken);
+    const session = await sessionRepository.findByRefreshTokenHash(refreshTokenHash);
 
-  return {
-    success: true,
-  };
-},
+    if (!session) {
+      throw new UnauthorizedError("Session not found");
+    }
 
-async refreshTokens(refreshToken) {
-  if (!refreshToken) {
-    throw new Error("Refresh token is required");
-  }
+    // THEFT / REUSE DETECTION:
+    // If this session was ALREADY revoked, an attacker or victim is attempting reuse!
+    // Revoke all active sessions for this user immediately (RFC 6819).
+    if (session.revokedAt) {
+      console.warn(`[Security Alert] Refresh token reuse detected for userId=${session.userId}. Revoking all active sessions.`);
+      await sessionRepository.revokeAllByUserId(session.userId);
+      throw new UnauthorizedError("Session has been revoked due to security violation");
+    }
 
-  let payload;
+    if (isTokenExpired(session.expiresAt)) {
+      throw new UnauthorizedError("Session has expired");
+    }
 
-  try {
-  payload = verifyRefreshToken(refreshToken);
-} catch (error) {
-  console.error("JWT REFRESH ERROR:", error);
-  throw new Error("Invalid refresh token");
-}
+    // ATOMIC ROTATION: Revoke active session conditionally (WHERE revokedAt IS NULL)
+    const affected = await sessionRepository.revokeIfActive(session.id);
+    if (affected !== 1) {
+      console.warn(`[Security Alert] Concurrent refresh token reuse detected for userId=${session.userId}. Revoking all sessions.`);
+      await sessionRepository.revokeAllByUserId(session.userId);
+      throw new UnauthorizedError("Session has been revoked due to concurrent reuse");
+    }
 
-  if (payload.type !== "refresh") {
-    throw new Error("Invalid refresh token");
-  }
+    const user = await userRepository.findFirst({
+      id: payload.sub,
+    });
 
-  const refreshTokenHash = hashRefreshToken(refreshToken);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedError("User is inactive or does not exist");
+    }
 
-  const session = await sessionRepository.findByRefreshTokenHash(
-    refreshTokenHash
-  );
+    if (!user.isVerified) {
+      throw new ForbiddenError("Please verify your email address before continuing.", "EMAIL_NOT_VERIFIED");
+    }
 
-  if (!session) {
-    throw new Error("Session not found");
-  }
+    const newAccessToken = generateAccessToken(user);
+    const newRefreshToken = generateRefreshToken(user);
 
-  if (session.revokedAt) {
-    throw new Error("Session has been revoked");
-  }
+    const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
 
-  if (
-    Temporal.Instant.compare(
-      Temporal.Instant.from(session.expiresAt),
-      Temporal.Now.instant()
-    ) <= 0
-  ) {
-    throw new Error("Session has expired");
-  }
+    const newExpiresAt = Temporal.Instant.fromEpochMilliseconds(
+      Date.now() + SESSION_TTL_MS
+    );
 
-  const user = await userRepository.findFirst({
-    id: payload.sub,
-  });
+    // Preserve/update client metadata on rotation
+    await sessionRepository.create({
+      userId: user.id,
+      refreshTokenHash: newRefreshTokenHash,
+      expiresAt: newExpiresAt,
+      userAgent: userAgent || session.userAgent || null,
+      ipAddress: ipAddress || session.ipAddress || null,
+      deviceName: session.deviceName || null,
+    });
 
-  if (!user || !user.isActive) {
-    throw new Error("User is inactive or does not exist");
-  }
-
-  if (!user.isVerified) {
-    throw new Error("Please verify your email address before continuing.");
-  }
-
-  await sessionRepository.revokeById(session.id);
-
-  const newAccessToken = generateAccessToken(user);
-  const newRefreshToken = generateRefreshToken(user);
-
-  const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
-
-  const newExpiresAt = Temporal.Instant.fromEpochMilliseconds(
-    Date.now() + 7 * 24 * 60 * 60 * 1000
-  );
-
-  await sessionRepository.create({
-    userId: user.id,
-    refreshTokenHash: newRefreshTokenHash,
-    expiresAt: newExpiresAt,
-  });
-
-  return {
-    accessToken: newAccessToken,
-    refreshToken: newRefreshToken,
-  };
-},
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+    };
+  },
 
   async forgotPassword(email) {
     const normalizedEmail = email.trim().toLowerCase();
@@ -358,13 +381,10 @@ async refreshTokens(refreshToken) {
 
     /*
      * Always return success here.
-     * This prevents attackers from discovering
-     * which email addresses have accounts.
+     * This prevents attackers from discovering which email addresses have accounts.
      */
     if (!user) {
-      return {
-        success: true,
-      };
+      return { success: true };
     }
 
     // Invalidate older unused reset tokens for this user
@@ -387,7 +407,7 @@ async refreshTokens(refreshToken) {
     const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
     const resetUrl = `${frontendBase}/reset?token=${rawToken}`;
 
-    // Send email unawaited, never log the link or token
+    // Send email unawaited, never log link or token
     mailService
       .sendPasswordResetEmail({
         to: user.email,
@@ -399,38 +419,23 @@ async refreshTokens(refreshToken) {
         console.error("[Auth Service] Failed to send password reset email:", err);
       });
 
-    return {
-      success: true,
-    };
+    return { success: true };
   },
 
   async resetPassword(token, newPassword) {
     if (!token) {
-      throw new Error("Invalid or expired reset token");
+      throw new BadRequestError("Invalid or expired reset token");
     }
 
     if (!newPassword) {
-      throw new Error("New password is required");
+      throw new BadRequestError("New password is required");
     }
 
     const tokenHash = hashResetToken(token.trim());
+    const resetToken = await passwordResetRepository.findByTokenHash(tokenHash);
 
-    const resetToken =
-      await passwordResetRepository.findByTokenHash(tokenHash);
-
-    if (!resetToken) {
-      console.warn("[Auth Service] Reset token record not found for submitted token");
-      throw new Error("Invalid or expired reset token");
-    }
-
-    if (resetToken.usedAt) {
-      console.warn(`[Auth Service] Reset token was already used at: ${resetToken.usedAt}`);
-      throw new Error("Invalid or expired reset token");
-    }
-
-    if (isTokenExpired(resetToken.expiresAt)) {
-      console.warn(`[Auth Service] Reset token expired (expiresAt: ${resetToken.expiresAt})`);
-      throw new Error("Invalid or expired reset token");
+    if (!resetToken || resetToken.usedAt || isTokenExpired(resetToken.expiresAt)) {
+      throw new BadRequestError("Invalid or expired reset token");
     }
 
     const user = await userRepository.findFirst({
@@ -438,49 +443,32 @@ async refreshTokens(refreshToken) {
     });
 
     if (!user || !user.isActive) {
-      console.warn("[Auth Service] User account not found or inactive for reset token");
-      throw new Error("Invalid or expired reset token");
+      throw new BadRequestError("Invalid or expired reset token");
     }
 
-    // Fix race condition: mark the token as used FIRST using conditional update (usedAt IS NULL)
-    // and verify that affected count is exactly 1 before updating the password
-    const rawAffectedCount = await passwordResetRepository.markAsUsed(
-      resetToken.id
-    );
+    // Mark as used FIRST atomically and verify affected count is exactly 1
+    const rawAffectedCount = await passwordResetRepository.markAsUsed(resetToken.id);
     const affectedCount = typeof rawAffectedCount === "number"
       ? rawAffectedCount
       : (rawAffectedCount?.affectedRows ?? rawAffectedCount?.rowCount ?? 0);
 
     if (affectedCount !== 1) {
-      console.warn(`[Auth Service] markAsUsed returned affectedCount ${affectedCount} (expected 1)`);
-      throw new Error("Invalid or expired reset token");
+      throw new BadRequestError("Invalid or expired reset token");
     }
 
     const passwordHash = await argon2.hash(newPassword);
+    await userRepository.updatePassword(user.id, passwordHash);
 
-    await userRepository.updatePassword(
-      user.id,
-      passwordHash
-    );
+    // Password change invalidates all existing sessions
+    await sessionRepository.revokeAllByUserId(user.id);
 
-    /*
-     * Password change invalidates all existing
-     * refresh-token sessions.
-     */
-    await sessionRepository.revokeAllByUserId(
-      user.id
-    );
-
-    return {
-      success: true,
-    };
+    return { success: true };
   },
 
   async requestEmailVerification(email) {
     const genericResponse = {
       success: true,
-      message:
-        "If an account exists for this email, a verification link has been generated",
+      message: "If an account exists for this email, a verification link has been generated",
     };
 
     if (!email) {
@@ -492,13 +480,7 @@ async refreshTokens(refreshToken) {
       email: normalizedEmail,
     });
 
-    // Always return generic response whether or not user exists
-    if (!user) {
-      return genericResponse;
-    }
-
-    // If user is already verified, do nothing and return generic response
-    if (user.isVerified) {
+    if (!user || user.isVerified) {
       return genericResponse;
     }
 
@@ -508,7 +490,6 @@ async refreshTokens(refreshToken) {
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = hashVerificationToken(rawToken);
 
-    // 24 hours expiration
     const expiresAt = Temporal.Instant.fromEpochMilliseconds(
       Date.now() + VERIFICATION_TOKEN_TTL_HOURS * 60 * 60 * 1000
     );
@@ -522,7 +503,6 @@ async refreshTokens(refreshToken) {
     const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
     const verificationUrl = `${frontendBase}/verify?token=${rawToken}`;
 
-    // Send email unawaited, never log token or link
     mailService
       .sendVerificationEmail({
         to: user.email,
@@ -541,25 +521,14 @@ async refreshTokens(refreshToken) {
     const INVALID_TOKEN_MESSAGE = "Invalid or expired verification token";
 
     if (!token) {
-      throw new Error(INVALID_TOKEN_MESSAGE);
+      throw new BadRequestError(INVALID_TOKEN_MESSAGE);
     }
 
     const tokenHash = hashVerificationToken(token.trim());
     const record = await emailVerificationRepository.findByTokenHash(tokenHash);
 
-    if (!record) {
-      console.warn("[Auth Service] Email verification token record not found");
-      throw new Error(INVALID_TOKEN_MESSAGE);
-    }
-
-    if (record.usedAt) {
-      console.warn(`[Auth Service] Email verification token already used at ${record.usedAt}`);
-      throw new Error(INVALID_TOKEN_MESSAGE);
-    }
-
-    if (isTokenExpired(record.expiresAt)) {
-      console.warn(`[Auth Service] Email verification token expired (expiresAt: ${record.expiresAt})`);
-      throw new Error(INVALID_TOKEN_MESSAGE);
+    if (!record || record.usedAt || isTokenExpired(record.expiresAt)) {
+      throw new BadRequestError(INVALID_TOKEN_MESSAGE);
     }
 
     const user = await userRepository.findFirst({
@@ -567,22 +536,18 @@ async refreshTokens(refreshToken) {
     });
 
     if (!user) {
-      console.warn("[Auth Service] User not found for verification token");
-      throw new Error(INVALID_TOKEN_MESSAGE);
+      throw new BadRequestError(INVALID_TOKEN_MESSAGE);
     }
 
-    // Mark as used atomically FIRST and check that affected count is 1
     const rawAffectedCount = await emailVerificationRepository.markAsUsed(record.id);
     const affectedCount = typeof rawAffectedCount === "number"
       ? rawAffectedCount
       : (rawAffectedCount?.affectedRows ?? rawAffectedCount?.rowCount ?? 0);
 
     if (affectedCount !== 1) {
-      console.warn(`[Auth Service] markAsUsed returned affectedCount ${affectedCount} (expected 1)`);
-      throw new Error(INVALID_TOKEN_MESSAGE);
+      throw new BadRequestError(INVALID_TOKEN_MESSAGE);
     }
 
-    // Set User.isVerified to true
     await userRepository.markAsVerified(user.email);
 
     return {

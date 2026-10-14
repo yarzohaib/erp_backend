@@ -1,5 +1,7 @@
 const crypto = require("crypto");
 const oauthService = require("../services/oauth.service");
+const { setAuthCookies } = require("../utils/cookies");
+const { UnauthorizedError } = require("../utils/errors");
 
 const OAUTH_COOKIE_NAME = "oauth_state";
 
@@ -123,7 +125,7 @@ const oauthController = {
     }
   },
 
-  async oauthExchange(req, res) {
+  async oauthExchange(req, res, next) {
     try {
       const { code } = req.body;
       const result = await oauthService.exchangeLoginCode(code, {
@@ -131,25 +133,20 @@ const oauthController = {
         ipAddress: req.ip,
       });
 
+      if (result.tokens) {
+        setAuthCookies(res, result.tokens);
+      }
+
       return res.status(200).json({
         success: true,
         message: "Login successful",
         data: result,
       });
     } catch (error) {
-      console.error("OAUTH EXCHANGE ERROR:", error);
-
       if (error.statusCode === 401 || error.message === "Invalid or expired code") {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid or expired code",
-        });
+        return next(new UnauthorizedError("Invalid or expired code"));
       }
-
-      return res.status(500).json({
-        success: false,
-        message: "Failed to exchange login code",
-      });
+      next(error);
     }
   },
 };

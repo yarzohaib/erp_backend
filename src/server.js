@@ -1,4 +1,5 @@
 require("dotenv").config();
+const env = require("./config/env");
 
 const { Temporal } = require("@js-temporal/polyfill");
 
@@ -7,7 +8,7 @@ globalThis.Temporal = Temporal;
 const app = require("./app");
 const db = require("./config/prisma");
 
-const PORT = process.env.PORT || 8000;
+const PORT = env.PORT || 8000;
 
 async function startServer() {
   try {

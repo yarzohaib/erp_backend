@@ -34,6 +34,22 @@ const sessionRepository = {
     return db.runtime().execute(query);
   },
 
+  async revokeIfActive(id) {
+    const revokedAt = Temporal.Now.instant().toString();
+
+    const query = db.raw.sql`
+      UPDATE "Session"
+      SET "revokedAt" = ${revokedAt}::timestamptz
+      WHERE "id" = ${id}
+        AND "revokedAt" IS NULL
+    `
+      .affectedCount()
+      .build();
+
+    const result = await db.runtime().execute(query);
+    return result?.affectedRows ?? result?.rowCount ?? result ?? 0;
+  },
+
   async revokeAllByUserId(userId) {
     const revokedAt = Temporal.Now.instant().toString();
 

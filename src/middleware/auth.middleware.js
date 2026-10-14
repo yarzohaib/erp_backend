@@ -2,21 +2,30 @@ const { verifyAccessToken } = require("../utils/jwt");
 
 function authenticate(req, res, next) {
   try {
-    const authorization = req.headers.authorization;
+    let token = null;
 
-    if (!authorization) {
-      return res.status(401).json({
-        success: false,
-        message: "Authorization token is required",
-      });
+    // 1. Prefer secure server-set HttpOnly cookie if present
+    if (req.cookies && req.cookies.access_token) {
+      token = req.cookies.access_token;
     }
 
-    const [scheme, token] = authorization.split(" ");
+    // 2. Fall back to Authorization: Bearer <token> header for API / mobile clients
+    if (!token && req.headers.authorization) {
+      const parts = req.headers.authorization.split(" ");
+      if (parts.length === 2 && parts[0] === "Bearer") {
+        token = parts[1];
+      } else {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid authorization header format",
+        });
+      }
+    }
 
-    if (scheme !== "Bearer" || !token) {
+    if (!token) {
       return res.status(401).json({
         success: false,
-        message: "Invalid authorization format",
+        message: "Authentication required",
       });
     }
 
@@ -25,12 +34,11 @@ function authenticate(req, res, next) {
     if (payload.type !== "access") {
       return res.status(401).json({
         success: false,
-        message: "Invalid access token",
+        message: "Invalid access token type",
       });
     }
 
     req.user = payload;
-
     next();
   } catch (error) {
     return res.status(401).json({
