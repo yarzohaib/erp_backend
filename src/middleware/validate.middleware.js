@@ -21,6 +21,30 @@ function validate(schema) {
   };
 }
 
+function validateParams(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.params);
+
+    if (!result.success) {
+      const firstIssue = result.error.issues?.[0];
+      const errorMessage = firstIssue
+        ? firstIssue.message
+        : "Invalid parameters";
+
+      return res.status(400).json({
+        success: false,
+        message: errorMessage,
+        errors: result.error.issues,
+      });
+    }
+
+    req.params = result.data;
+    next();
+  };
+}
+
 module.exports = {
   validate,
+  validateParams,
 };
+

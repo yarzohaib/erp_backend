@@ -1,0 +1,161 @@
+[
+  {
+    "id": "table.Signature",
+    "label": "Create table \"Signature\"",
+    "summary": "Creates table \"Signature\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "Signature"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Signature\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Signature\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"Signature\"",
+        "sql": "CREATE TABLE \"public\".\"Signature\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"data\" json NOT NULL,\n  \"id\" text NOT NULL,\n  \"name\" text NOT NULL,\n  \"templateId\" text NOT NULL,\n  \"templateVersion\" int4 DEFAULT 1 NOT NULL,\n  \"updatedAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"userId\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Signature\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Signature\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Signature.Signature_userId_idx_a489d58a",
+    "label": "Create index \"Signature_userId_idx_a489d58a\" on \"Signature\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Signature_userId_idx_a489d58a",
+        "table": "Signature"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Signature_userId_idx_a489d58a\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Signature_userId_idx_a489d58a\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Signature_userId_idx_a489d58a\"",
+        "sql": "CREATE INDEX \"Signature_userId_idx_a489d58a\" ON \"public\".\"Signature\" (\"userId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Signature_userId_idx_a489d58a\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Signature_userId_idx_a489d58a\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Signature.Signature_userId_updatedAt_idx_42f5280d",
+    "label": "Create index \"Signature_userId_updatedAt_idx_42f5280d\" on \"Signature\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Signature_userId_updatedAt_idx_42f5280d",
+        "table": "Signature"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Signature_userId_updatedAt_idx_42f5280d\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Signature_userId_updatedAt_idx_42f5280d\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Signature_userId_updatedAt_idx_42f5280d\"",
+        "sql": "CREATE INDEX \"Signature_userId_updatedAt_idx_42f5280d\" ON \"public\".\"Signature\" (\"userId\", \"updatedAt\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Signature_userId_updatedAt_idx_42f5280d\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Signature_userId_updatedAt_idx_42f5280d\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.Signature.Signature_userId_fkey",
+    "label": "Add foreign key \"Signature_userId_fkey\" on \"Signature\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "Signature_userId_fkey",
+        "table": "Signature"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"Signature_userId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Signature_userId_fkey",
+          "public",
+          "\"public\".\"Signature\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"Signature_userId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"Signature\"\nADD CONSTRAINT \"Signature_userId_fkey\"\nFOREIGN KEY (\"userId\")\nREFERENCES \"public\".\"User\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"Signature_userId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Signature_userId_fkey",
+          "public",
+          "\"public\".\"Signature\""
+        ]
+      }
+    ]
+  }
+]

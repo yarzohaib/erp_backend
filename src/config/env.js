@@ -23,6 +23,7 @@ const envSchema = z.object({
   S3_PUBLIC_BASE_URL: z.string().optional(),
   MAIL_ENABLED: z.string().default("false"),
   MAIL_FROM: z.string().optional(),
+  SIGNATURE_LIMIT_PER_USER: z.coerce.number().default(3),
 });
 
 function validateEnv() {

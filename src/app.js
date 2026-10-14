@@ -4,6 +4,7 @@ const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const authRoutes = require("./routes/auth.routes");
 const uploadRoutes = require("./routes/upload.routes");
+const signatureRoutes = require("./routes/signature.routes");
 const errorHandler = require("./middleware/errorHandler.middleware");
 
 const app = express();
@@ -18,12 +19,13 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "10kb" }));
-app.use(express.urlencoded({ extended: true, limit: "10kb" }));
+app.use(express.json({ limit: "50kb" }));
+app.use(express.urlencoded({ extended: true, limit: "50kb" }));
 app.use(cookieParser());
 
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/uploads", uploadRoutes);
+app.use("/api/v1/signatures", signatureRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({
