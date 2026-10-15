@@ -34,9 +34,28 @@ const isValidImageUrl = (val) => {
 };
 
 /**
- * Validates social URL: must be empty string or a valid HTTP/HTTPS URL (max 300 chars)
+ * Validates that an S3 image URL is strictly an HTTPS URL
+ * starting with process.env.S3_PUBLIC_BASE_URL.
+ * Relative paths, data: URLs, and other origins are rejected.
  */
-const isValidSocialUrl = (val) => {
+const isValidS3Url = (val) => {
+  if (typeof val !== "string") return false;
+  const trimmed = val.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith("data:")) return false;
+
+  const s3Base = (
+    process.env.S3_PUBLIC_BASE_URL ||
+    "https://sigsignature-assets-prod.s3.ap-southeast-2.amazonaws.com"
+  ).replace(/\/+$/, "");
+
+  return trimmed.startsWith("https://") && trimmed.startsWith(s3Base);
+};
+
+/**
+ * Validates optional HTTP/HTTPS URL (max 300 chars, empty string or undefined allowed).
+ */
+const isValidHttpUrl = (val) => {
   if (val === "" || val === undefined || val === null) return true;
   if (typeof val !== "string") return false;
   const trimmed = val.trim();
@@ -48,6 +67,26 @@ const isValidSocialUrl = (val) => {
     return false;
   }
 };
+
+/**
+ * Validates social URL: must be empty string or a valid HTTP/HTTPS URL (max 300 chars)
+ */
+const isValidSocialUrl = (val) => {
+  return isValidHttpUrl(val);
+};
+
+const ALLOWED_FONT_FAMILIES = [
+  "Arial",
+  "Georgia",
+  "Verdana",
+  "Trebuchet MS",
+  "Tahoma",
+  "Inter",
+  "Roboto",
+  "DM Sans",
+  "Montserrat",
+  "Commissioner",
+];
 
 const socialsSchema = z
   .object({
@@ -112,6 +151,214 @@ const optionalSchema = z
   .strip()
   .default({});
 
+/**
+ * Optional design configuration (Design Studio).
+ * Rejects premium themes (luxury, glass, neon) and shapes (glass, blob).
+ */
+const designSchema = z
+  .object({
+    theme: z.enum(["corporate", "minimal", "modern", "dark"], {
+      error:
+        "Theme must be one of 'corporate', 'minimal', 'modern', or 'dark'",
+    }),
+    shape: z.enum(["rounded", "square", "pill"], {
+      error: "Shape must be one of 'rounded', 'square', or 'pill'",
+    }),
+    buttonStyle: z.enum(["solid", "outline"], {
+      error: "Button style must be one of 'solid' or 'outline'",
+    }),
+  })
+  .strip();
+
+/**
+ * Discriminated union of extra items (maximum 20 items in extras array).
+ */
+const extraTextSchema = z
+  .object({
+    type: z.literal("text"),
+    id: z
+      .string({ error: "Item ID is required" })
+      .trim()
+      .min(1, { error: "Item ID cannot be empty" })
+      .max(40, { error: "Item ID cannot exceed 40 characters" }),
+    text: z
+      .string({ error: "Text is required" })
+      .trim()
+      .max(300, { error: "Text cannot exceed 300 characters" }),
+    align: z.enum(["left", "center", "right"], {
+      error: "Align must be one of 'left', 'center', or 'right'",
+    }),
+    size: z.enum(["sm", "md", "lg"], {
+      error: "Size must be one of 'sm', 'md', or 'lg'",
+    }),
+    bold: z.boolean({ error: "Bold must be a boolean" }),
+    width: z
+      .number({ error: "Width must be a number" })
+      .int({ error: "Width must be an integer" })
+      .min(20, { error: "Width must be between 20 and 600" })
+      .max(600, { error: "Width must be between 20 and 600" })
+      .optional(),
+  })
+  .strip();
+
+const extraImageSchema = z
+  .object({
+    type: z.literal("image"),
+    id: z
+      .string({ error: "Item ID is required" })
+      .trim()
+      .min(1, { error: "Item ID cannot be empty" })
+      .max(40, { error: "Item ID cannot exceed 40 characters" }),
+    url: z
+      .string({ error: "Image URL is required" })
+      .trim()
+      .refine(isValidS3Url, {
+        error:
+          "Image URL must be an HTTPS URL hosted on authorized storage",
+      }),
+    width: z
+      .number({ error: "Width must be a number" })
+      .int({ error: "Width must be an integer" })
+      .min(20, { error: "Width must be between 20 and 600" })
+      .max(600, { error: "Width must be between 20 and 600" }),
+    align: z.enum(["left", "center", "right"], {
+      error: "Align must be one of 'left', 'center', or 'right'",
+    }),
+    linkUrl: z
+      .string()
+      .trim()
+      .max(300, { error: "Link URL cannot exceed 300 characters" })
+      .refine(isValidHttpUrl, {
+        error: "Link URL must be a valid HTTP or HTTPS URL",
+      })
+      .optional(),
+  })
+  .strip();
+
+const extraDividerSchema = z
+  .object({
+    type: z.literal("divider"),
+    id: z
+      .string({ error: "Item ID is required" })
+      .trim()
+      .min(1, { error: "Item ID cannot be empty" })
+      .max(40, { error: "Item ID cannot exceed 40 characters" }),
+    width: z
+      .number({ error: "Width must be a number" })
+      .int({ error: "Width must be an integer" })
+      .min(20, { error: "Width must be between 20 and 600" })
+      .max(600, { error: "Width must be between 20 and 600" })
+      .optional(),
+    align: z
+      .enum(["left", "center", "right"], {
+        error: "Align must be one of 'left', 'center', or 'right'",
+      })
+      .optional(),
+    thickness: z
+      .number({ error: "Thickness must be a number" })
+      .int({ error: "Thickness must be an integer" })
+      .min(1, { error: "Thickness must be between 1 and 20" })
+      .max(20, { error: "Thickness must be between 1 and 20" })
+      .optional(),
+    orientation: z
+      .enum(["horizontal", "vertical"], {
+        error: "Orientation must be 'horizontal' or 'vertical'",
+      })
+      .optional(),
+  })
+  .strip();
+
+const extraCtaSchema = z
+  .object({
+    type: z.literal("cta"),
+    id: z
+      .string({ error: "Item ID is required" })
+      .trim()
+      .min(1, { error: "Item ID cannot be empty" })
+      .max(40, { error: "Item ID cannot exceed 40 characters" }),
+    label: z
+      .string({ error: "Label is required" })
+      .trim()
+      .min(1, { error: "Label cannot be empty" })
+      .max(40, { error: "Label cannot exceed 40 characters" }),
+    url: z
+      .string({ error: "URL is required" })
+      .trim()
+      .max(300, { error: "URL cannot exceed 300 characters" })
+      .refine(
+        (val) => {
+          if (!val) return false;
+          try {
+            const parsed = new URL(val);
+            return (
+              parsed.protocol === "http:" || parsed.protocol === "https:"
+            );
+          } catch {
+            return false;
+          }
+        },
+        { error: "URL must be a valid HTTP or HTTPS URL" }
+      ),
+    align: z.enum(["left", "center", "right"], {
+      error: "Align must be one of 'left', 'center', or 'right'",
+    }),
+    width: z
+      .number({ error: "Width must be a number" })
+      .int({ error: "Width must be an integer" })
+      .min(20, { error: "Width must be between 20 and 600" })
+      .max(600, { error: "Width must be between 20 and 600" })
+      .optional(),
+  })
+  .strip();
+
+const extraBannerSchema = z
+  .object({
+    type: z.literal("banner"),
+    id: z
+      .string({ error: "Item ID is required" })
+      .trim()
+      .min(1, { error: "Item ID cannot be empty" })
+      .max(40, { error: "Item ID cannot exceed 40 characters" }),
+    imageUrl: z
+      .string({ error: "Banner image URL is required" })
+      .trim()
+      .refine(isValidS3Url, {
+        error:
+          "Banner image URL must be an HTTPS URL hosted on authorized storage",
+      }),
+    linkUrl: z
+      .string()
+      .trim()
+      .max(300, { error: "Link URL cannot exceed 300 characters" })
+      .refine(isValidHttpUrl, {
+        error: "Link URL must be a valid HTTP or HTTPS URL",
+      })
+      .optional(),
+  })
+  .strip();
+
+const extraItemSchema = z.discriminatedUnion(
+  "type",
+  [
+    extraTextSchema,
+    extraImageSchema,
+    extraDividerSchema,
+    extraCtaSchema,
+    extraBannerSchema,
+  ],
+  {
+    error:
+      "Extra item type must be one of 'text', 'image', 'divider', 'cta', or 'banner'",
+  }
+);
+
+const extrasSchema = z
+  .array(extraItemSchema, {
+    error: "Extras must be an array",
+  })
+  .max(20, { error: "Extras cannot exceed 20 items" })
+  .optional();
+
 const signatureDataSchema = z
   .object({
     fullName: z
@@ -166,17 +413,20 @@ const signatureDataSchema = z
       .regex(/^#[0-9a-fA-F]{6}$/, {
         error: "Theme color must be a valid hex color code matching #RRGGBB",
       }),
-    fontFamily: z
-      .string({ error: "Font family is required" })
-      .trim()
-      .max(40, { error: "Font family cannot exceed 40 characters" }),
-    layout: z.enum(["two-column", "horizontal", "compact"], {
-      error: "Layout must be one of 'two-column', 'horizontal', or 'compact'",
-    }),
-    socialIconsStyle: z.enum(["filled", "outline", "circle"], {
+    fontFamily: z.enum(ALLOWED_FONT_FAMILIES, {
       error:
-        "Social icons style must be one of 'filled', 'outline', or 'circle'",
+        "Font family must be one of: Arial, Georgia, Verdana, Trebuchet MS, Tahoma, Inter, Roboto, DM Sans, Montserrat, Commissioner",
     }),
+    layout: z.enum(["two-column", "horizontal", "compact", "single"], {
+      error:
+        "Layout must be one of 'two-column', 'horizontal', 'compact', or 'single'",
+    }),
+    socialIconsStyle: z.enum(["filled", "outline", "circle", "minimal"], {
+      error:
+        "Social icons style must be one of 'filled', 'outline', 'circle', or 'minimal'",
+    }),
+    design: designSchema.optional(),
+    extras: extrasSchema,
     socials: socialsSchema,
     optional: optionalSchema,
     address: z
@@ -298,4 +548,6 @@ module.exports = {
   signatureIdParamSchema,
   signatureDataSchema,
   isValidImageUrl,
+  isValidS3Url,
+  ALLOWED_FONT_FAMILIES,
 };
