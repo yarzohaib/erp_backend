@@ -198,6 +198,7 @@ const extraTextSchema = z
       .min(20, { error: "Width must be between 20 and 600" })
       .max(600, { error: "Width must be between 20 and 600" })
       .optional(),
+    column: z.enum(["left", "right", "full"]).optional(),
   })
   .strip();
 
@@ -232,6 +233,7 @@ const extraImageSchema = z
         error: "Link URL must be a valid HTTP or HTTPS URL",
       })
       .optional(),
+    column: z.enum(["left", "right", "full"]).optional(),
   })
   .strip();
 
@@ -265,6 +267,7 @@ const extraDividerSchema = z
         error: "Orientation must be 'horizontal' or 'vertical'",
       })
       .optional(),
+    column: z.enum(["left", "right", "full"]).optional(),
   })
   .strip();
 
@@ -308,6 +311,7 @@ const extraCtaSchema = z
       .min(20, { error: "Width must be between 20 and 600" })
       .max(600, { error: "Width must be between 20 and 600" })
       .optional(),
+    column: z.enum(["left", "right", "full"]).optional(),
   })
   .strip();
 
@@ -334,6 +338,7 @@ const extraBannerSchema = z
         error: "Link URL must be a valid HTTP or HTTPS URL",
       })
       .optional(),
+    column: z.enum(["left", "right", "full"]).optional(),
   })
   .strip();
 
