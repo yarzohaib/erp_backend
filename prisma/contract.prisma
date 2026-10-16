@@ -19,6 +19,7 @@ model User {
   oauthAccounts       OAuthAccount[]
   oauthLoginCodes     OAuthLoginCode[]
   signatures          Signature[]
+  team                Team?
 }
 
 model Session {
@@ -128,4 +129,45 @@ model Signature {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, updatedAt])
+}
+
+model Team {
+  id              String       @id @default(uuid())
+  ownerId         String       @unique
+  name            String
+  kind            String
+  templateId      String
+  templateVersion Int          @default(1)
+  data            Json
+  memberLimit     Int          @default(3)
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @default(now())
+
+  owner           User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members         TeamMember[]
+}
+
+model TeamMember {
+  id             String    @id @default(uuid())
+  teamId         String
+  name           String
+  email          String
+  jobTitle       String    @default("")
+  phone          String    @default("")
+  photoUrl       String    @default("")
+  status         String    @default("draft")
+  tokenHash      String?   @unique
+  tokenExpiresAt DateTime?
+  sentAt         DateTime?
+  acceptedAt     DateTime?
+  sendCount      Int       @default(0)
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now())
+
+  team           Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, email])
+  @@index([teamId])
 }

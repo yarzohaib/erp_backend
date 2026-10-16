@@ -24,6 +24,7 @@ const envSchema = z.object({
   MAIL_ENABLED: z.string().default("false"),
   MAIL_FROM: z.string().optional(),
   SIGNATURE_LIMIT_PER_USER: z.coerce.number().default(3),
+  TEAM_MEMBER_LIMIT_FREE: z.coerce.number().default(3),
 });
 
 function validateEnv() {

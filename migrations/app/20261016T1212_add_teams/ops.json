@@ -1,0 +1,329 @@
+[
+  {
+    "id": "table.Team",
+    "label": "Create table \"Team\"",
+    "summary": "Creates table \"Team\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "Team"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Team\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Team\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"Team\"",
+        "sql": "CREATE TABLE \"public\".\"Team\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"data\" json NOT NULL,\n  \"id\" text NOT NULL,\n  \"kind\" text NOT NULL,\n  \"memberLimit\" int4 DEFAULT 3 NOT NULL,\n  \"name\" text NOT NULL,\n  \"ownerId\" text NOT NULL,\n  \"templateId\" text NOT NULL,\n  \"templateVersion\" int4 DEFAULT 1 NOT NULL,\n  \"updatedAt\" timestamptz DEFAULT (now()) NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Team\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Team\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.TeamMember",
+    "label": "Create table \"TeamMember\"",
+    "summary": "Creates table \"TeamMember\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "TeamMember"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"TeamMember\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"TeamMember\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"TeamMember\"",
+        "sql": "CREATE TABLE \"public\".\"TeamMember\" (\n  \"acceptedAt\" timestamptz,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"email\" text NOT NULL,\n  \"id\" text NOT NULL,\n  \"jobTitle\" text DEFAULT '' NOT NULL,\n  \"name\" text NOT NULL,\n  \"phone\" text DEFAULT '' NOT NULL,\n  \"photoUrl\" text DEFAULT '' NOT NULL,\n  \"sendCount\" int4 DEFAULT 0 NOT NULL,\n  \"sentAt\" timestamptz,\n  \"status\" text DEFAULT 'draft' NOT NULL,\n  \"teamId\" text NOT NULL,\n  \"tokenExpiresAt\" timestamptz,\n  \"tokenHash\" text,\n  \"updatedAt\" timestamptz DEFAULT (now()) NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"TeamMember\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"TeamMember\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.Team.Team_ownerId_key",
+    "label": "Add unique constraint on \"Team\" (ownerId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "Team_ownerId_key",
+        "table": "Team"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"Team_ownerId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Team_ownerId_key",
+          "public",
+          "\"public\".\"Team\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"Team_ownerId_key\"",
+        "sql": "ALTER TABLE \"public\".\"Team\" ADD CONSTRAINT \"Team_ownerId_key\" UNIQUE (\"ownerId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"Team_ownerId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Team_ownerId_key",
+          "public",
+          "\"public\".\"Team\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.TeamMember.TeamMember_tokenHash_key",
+    "label": "Add unique constraint on \"TeamMember\" (tokenHash)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "TeamMember_tokenHash_key",
+        "table": "TeamMember"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"TeamMember_tokenHash_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "TeamMember_tokenHash_key",
+          "public",
+          "\"public\".\"TeamMember\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"TeamMember_tokenHash_key\"",
+        "sql": "ALTER TABLE \"public\".\"TeamMember\" ADD CONSTRAINT \"TeamMember_tokenHash_key\" UNIQUE (\"tokenHash\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"TeamMember_tokenHash_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "TeamMember_tokenHash_key",
+          "public",
+          "\"public\".\"TeamMember\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.TeamMember.TeamMember_teamId_email_key",
+    "label": "Add unique constraint on \"TeamMember\" (teamId, email)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "TeamMember_teamId_email_key",
+        "table": "TeamMember"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"TeamMember_teamId_email_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "TeamMember_teamId_email_key",
+          "public",
+          "\"public\".\"TeamMember\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"TeamMember_teamId_email_key\"",
+        "sql": "ALTER TABLE \"public\".\"TeamMember\" ADD CONSTRAINT \"TeamMember_teamId_email_key\" UNIQUE (\"teamId\", \"email\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"TeamMember_teamId_email_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "TeamMember_teamId_email_key",
+          "public",
+          "\"public\".\"TeamMember\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.TeamMember.TeamMember_teamId_idx_f2b72ab3",
+    "label": "Create index \"TeamMember_teamId_idx_f2b72ab3\" on \"TeamMember\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "TeamMember_teamId_idx_f2b72ab3",
+        "table": "TeamMember"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"TeamMember_teamId_idx_f2b72ab3\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"TeamMember_teamId_idx_f2b72ab3\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"TeamMember_teamId_idx_f2b72ab3\"",
+        "sql": "CREATE INDEX \"TeamMember_teamId_idx_f2b72ab3\" ON \"public\".\"TeamMember\" (\"teamId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"TeamMember_teamId_idx_f2b72ab3\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"TeamMember_teamId_idx_f2b72ab3\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.Team.Team_ownerId_fkey",
+    "label": "Add foreign key \"Team_ownerId_fkey\" on \"Team\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "Team_ownerId_fkey",
+        "table": "Team"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"Team_ownerId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Team_ownerId_fkey",
+          "public",
+          "\"public\".\"Team\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"Team_ownerId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"Team\"\nADD CONSTRAINT \"Team_ownerId_fkey\"\nFOREIGN KEY (\"ownerId\")\nREFERENCES \"public\".\"User\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"Team_ownerId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Team_ownerId_fkey",
+          "public",
+          "\"public\".\"Team\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.TeamMember.TeamMember_teamId_fkey",
+    "label": "Add foreign key \"TeamMember_teamId_fkey\" on \"TeamMember\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "TeamMember_teamId_fkey",
+        "table": "TeamMember"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"TeamMember_teamId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "TeamMember_teamId_fkey",
+          "public",
+          "\"public\".\"TeamMember\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"TeamMember_teamId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"TeamMember\"\nADD CONSTRAINT \"TeamMember_teamId_fkey\"\nFOREIGN KEY (\"teamId\")\nREFERENCES \"public\".\"Team\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"TeamMember_teamId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "TeamMember_teamId_fkey",
+          "public",
+          "\"public\".\"TeamMember\""
+        ]
+      }
+    ]
+  }
+]

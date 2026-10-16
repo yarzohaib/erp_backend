@@ -377,6 +377,7 @@ const freeTextSchema = z
     size: z.enum(["sm", "md", "lg"]).default("md"),
     bold: z.boolean().default(false),
     align: z.enum(["left", "center", "right"]).default("left"),
+    bind: z.enum(["name", "jobTitle", "email", "phone"]).optional(),
   })
   .passthrough();
 
@@ -391,6 +392,7 @@ const freeImageSchema = z
     locked: z.boolean().optional(),
     url: z.string().max(2000).default(""),
     linkUrl: z.string().max(2000).optional(),
+    bind: z.enum(["photo"]).optional(),
   })
   .passthrough();
 
