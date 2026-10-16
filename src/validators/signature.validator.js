@@ -364,6 +364,124 @@ const extrasSchema = z
   .max(20, { error: "Extras cannot exceed 20 items" })
   .optional();
 
+const freeTextSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    type: z.literal("text"),
+    x: z.number(),
+    y: z.number(),
+    w: z.number(),
+    h: z.number(),
+    locked: z.boolean().optional(),
+    text: z.string().max(1000).default(""),
+    size: z.enum(["sm", "md", "lg"]).default("md"),
+    bold: z.boolean().default(false),
+    align: z.enum(["left", "center", "right"]).default("left"),
+  })
+  .passthrough();
+
+const freeImageSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    type: z.literal("image"),
+    x: z.number(),
+    y: z.number(),
+    w: z.number(),
+    h: z.number(),
+    locked: z.boolean().optional(),
+    url: z.string().max(2000).default(""),
+    linkUrl: z.string().max(2000).optional(),
+  })
+  .passthrough();
+
+const freeLogoSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    type: z.literal("logo"),
+    x: z.number(),
+    y: z.number(),
+    w: z.number(),
+    h: z.number(),
+    locked: z.boolean().optional(),
+    url: z.string().max(2000).default(""),
+    linkUrl: z.string().max(2000).optional(),
+  })
+  .passthrough();
+
+const freeBannerSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    type: z.literal("banner"),
+    x: z.number(),
+    y: z.number(),
+    w: z.number(),
+    h: z.number(),
+    locked: z.boolean().optional(),
+    url: z.string().max(2000).default(""),
+    linkUrl: z.string().max(2000).optional(),
+  })
+  .passthrough();
+
+const freeDividerSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    type: z.literal("divider"),
+    x: z.number(),
+    y: z.number(),
+    w: z.number(),
+    h: z.number(),
+    locked: z.boolean().optional(),
+    orientation: z.enum(["horizontal", "vertical"]).default("horizontal"),
+    thickness: z.number().min(1).max(50).default(1),
+  })
+  .passthrough();
+
+const freeCtaSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    type: z.literal("cta"),
+    x: z.number(),
+    y: z.number(),
+    w: z.number(),
+    h: z.number(),
+    locked: z.boolean().optional(),
+    label: z.string().max(200).default("Button"),
+    url: z.string().max(2000).default("#"),
+  })
+  .passthrough();
+
+const freeSocialSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    type: z.literal("social"),
+    x: z.number(),
+    y: z.number(),
+    w: z.number(),
+    h: z.number(),
+    locked: z.boolean().optional(),
+  })
+  .passthrough();
+
+const freeElementSchema = z.discriminatedUnion("type", [
+  freeTextSchema,
+  freeImageSchema,
+  freeLogoSchema,
+  freeBannerSchema,
+  freeDividerSchema,
+  freeCtaSchema,
+  freeSocialSchema,
+]);
+
+const freeElementsSchema = z.array(freeElementSchema).max(50).optional();
+
+const canvasSchema = z
+  .object({
+    width: z.number().int().min(100).max(1200).default(600),
+    height: z.number().int().min(50).max(2000).default(200),
+  })
+  .passthrough()
+  .optional();
+
 const signatureDataSchema = z
   .object({
     fullName: z
@@ -397,12 +515,14 @@ const signatureDataSchema = z
       .max(200, { error: "Website cannot exceed 200 characters" })
       .default(""),
     avatarUrl: z
-      .string({ error: "Avatar URL is required" })
+      .string()
       .trim()
-      .refine(isValidImageUrl, {
+      .refine((val) => val === "" || isValidImageUrl(val), {
         error:
-          "Avatar URL must be a relative path starting with '/' or an HTTPS URL hosted on authorized storage",
-      }),
+          "Avatar URL must be empty, a relative path starting with '/', or an HTTPS URL hosted on authorized storage",
+      })
+      .optional()
+      .default(""),
     companyLogoUrl: z
       .string()
       .trim()
@@ -449,8 +569,10 @@ const signatureDataSchema = z
       .trim()
       .max(1000, { error: "Disclaimer cannot exceed 1000 characters" })
       .optional(),
+    canvas: canvasSchema,
+    elements: freeElementsSchema,
   })
-  .strip();
+  .passthrough();
 
 const createSignatureSchema = z
   .object({
@@ -478,9 +600,9 @@ const createSignatureSchema = z
   })
   .strip()
   .refine(
-    (body) => Buffer.byteLength(JSON.stringify(body.data), "utf8") <= 20480,
+    (body) => Buffer.byteLength(JSON.stringify(body.data), "utf8") <= 65536,
     {
-      error: "Signature data payload size cannot exceed 20 KB",
+      error: "Signature data payload size cannot exceed 64 KB",
       path: ["data"],
     }
   );
@@ -529,10 +651,10 @@ const updateSignatureSchema = z
   .refine(
     (body) => {
       if (!body.data) return true;
-      return Buffer.byteLength(JSON.stringify(body.data), "utf8") <= 20480;
+      return Buffer.byteLength(JSON.stringify(body.data), "utf8") <= 65536;
     },
     {
-      error: "Signature data payload size cannot exceed 20 KB",
+      error: "Signature data payload size cannot exceed 64 KB",
       path: ["data"],
     }
   );
