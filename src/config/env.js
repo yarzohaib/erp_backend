@@ -25,6 +25,10 @@ const envSchema = z.object({
   MAIL_FROM: z.string().optional(),
   SIGNATURE_LIMIT_PER_USER: z.coerce.number().default(3),
   TEAM_MEMBER_LIMIT_FREE: z.coerce.number().default(3),
+  TEAM_INVITE_TTL_DAYS: z.coerce.number().default(14),
+  TEAM_SEND_DAILY_LIMIT: z.coerce.number().default(10),
+  TEAM_SEND_MAX_PER_MEMBER: z.coerce.number().default(5),
+  TEAM_SEND_COOLDOWN_SECONDS: z.coerce.number().default(60),
 });
 
 function validateEnv() {

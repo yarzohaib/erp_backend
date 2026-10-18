@@ -1,0 +1,44 @@
+[
+  {
+    "id": "column.public.TeamMember.socials",
+    "label": "Add column \"socials\" to \"TeamMember\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "socials",
+        "table": "TeamMember"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"socials\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "TeamMember",
+          "socials"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"socials\"",
+        "sql": "ALTER TABLE \"public\".\"TeamMember\" ADD COLUMN \"socials\" json"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"socials\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "TeamMember",
+          "socials"
+        ]
+      }
+    ]
+  }
+]

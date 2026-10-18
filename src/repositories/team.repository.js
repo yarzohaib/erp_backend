@@ -116,6 +116,7 @@ const teamRepository = {
     jobTitle = "",
     phone = "",
     photoUrl = "",
+    socials = [],
     status = "draft",
   }) {
     return TeamMember.create({
@@ -125,6 +126,7 @@ const teamRepository = {
       jobTitle,
       phone,
       photoUrl,
+      socials,
       status,
     });
   },
@@ -143,6 +145,20 @@ const teamRepository = {
       return TeamMember.where({ id }).first();
     }
     return res;
+  },
+
+  /**
+   * Find team by teamId.
+   */
+  async findTeamById(id) {
+    return Team.where({ id }).first();
+  },
+
+  /**
+   * Find a single team member by unique tokenHash.
+   */
+  async findMemberByTokenHash(tokenHash) {
+    return TeamMember.where({ tokenHash }).first();
   },
 
   /**

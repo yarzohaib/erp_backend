@@ -1,6 +1,19 @@
 const teamService = require("../services/team.service");
 
 /**
+ * Computes live member status: returns "expired" if status is "sent" and tokenExpiresAt has elapsed.
+ */
+function computeMemberStatus(member) {
+  if (member.status === "sent" && member.tokenExpiresAt) {
+    const expiresAtDate = new Date(member.tokenExpiresAt.toString());
+    if (expiresAtDate.getTime() <= Date.now()) {
+      return "expired";
+    }
+  }
+  return member.status || "draft";
+}
+
+/**
  * Formats a TeamMember record ensuring tokenHash is never exposed.
  */
 function formatMember(member) {
@@ -13,7 +26,8 @@ function formatMember(member) {
     jobTitle: member.jobTitle || "",
     phone: member.phone || "",
     photoUrl: member.photoUrl || "",
-    status: member.status || "draft",
+    socials: Array.isArray(member.socials) ? member.socials : [],
+    status: computeMemberStatus(member),
     tokenExpiresAt:
       member.tokenExpiresAt
         ? typeof member.tokenExpiresAt?.toISOString === "function"
@@ -197,6 +211,97 @@ const teamController = {
       return res.status(200).json({
         success: true,
         message: "Team member removed successfully",
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/team/members/:memberId/send
+   * Generate token and send or resend invite email.
+   */
+  async sendInvite(req, res, next) {
+    try {
+      const userId = req.user.id || req.user.sub;
+      const { memberId } = req.params;
+      const result = await teamService.sendInvite(userId, memberId);
+
+      if (result.suppressed) {
+        return res.status(200).json({
+          success: true,
+          delivered: false,
+          suppressed: true,
+          ...(result.devInviteUrl && { devInviteUrl: result.devInviteUrl }),
+          data: {
+            ...formatMember(result.member),
+            ...(result.devInviteUrl && { devInviteUrl: result.devInviteUrl }),
+          },
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        delivered: true,
+        message: "Invite email sent successfully",
+        data: formatMember(result.member),
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/team/members/:memberId/revoke
+   * Revoke an active invite link for a team member.
+   */
+  async revokeInvite(req, res, next) {
+    try {
+      const userId = req.user.id || req.user.sub;
+      const { memberId } = req.params;
+      const updatedMember = await teamService.revokeInvite(userId, memberId);
+
+      return res.status(200).json({
+        success: true,
+        message: "Team invite revoked successfully",
+        data: formatMember(updatedMember),
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * GET /api/v1/public/team/invite/:token
+   * Public endpoint to retrieve invite details for recipient.
+   */
+  async getPublicInvite(req, res, next) {
+    try {
+      const { token } = req.params;
+      const data = await teamService.getPublicInvite(token);
+
+      return res.status(200).json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * POST /api/v1/public/team/invite/:token/accept
+   * Public endpoint to accept a team invite.
+   */
+  async acceptPublicInvite(req, res, next) {
+    try {
+      const { token } = req.params;
+      const data = await teamService.acceptPublicInvite(token);
+
+      return res.status(200).json({
+        success: true,
+        message: "Team invite accepted successfully",
+        data,
       });
     } catch (error) {
       next(error);

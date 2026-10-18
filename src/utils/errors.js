@@ -45,6 +45,18 @@ class TooManyRequestsError extends AppError {
   }
 }
 
+class GoneError extends AppError {
+  constructor(message = "Resource is no longer available", code = "GONE") {
+    super(message, 410, code);
+  }
+}
+
+class BadGatewayError extends AppError {
+  constructor(message = "Bad gateway", code = "BAD_GATEWAY") {
+    super(message, 502, code);
+  }
+}
+
 module.exports = {
   AppError,
   BadRequestError,
@@ -53,4 +65,6 @@ module.exports = {
   NotFoundError,
   ConflictError,
   TooManyRequestsError,
+  GoneError,
+  BadGatewayError,
 };

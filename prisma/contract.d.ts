@@ -34,7 +34,7 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'284703afb3bab3cbc6841e6320766bf7ad9e89f195921b73dfb9daceba61bfc0'>;
+  StorageHashBase<'5b738e1983d1786ab733f10d28e0d3d83dcdc2ca5bb88a767ea62871b77c7562'>;
 export type ExecutionHash =
   ExecutionHashBase<'883e2c80aab4489619a3a40c9f199046fe27141721f36df26650b07f360e4d35'>;
 export type ProfileHash =
@@ -331,6 +331,7 @@ export type FieldOutputTypes = {
       readonly photoUrl: CodecTypes['pg/text@1']['output'];
       readonly sendCount: CodecTypes['pg/int4@1']['output'];
       readonly sentAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly socials: CodecTypes['pg/json@1']['output'] | null;
       readonly status: CodecTypes['pg/text@1']['output'];
       readonly teamId: CodecTypes['pg/text@1']['output'];
       readonly tokenExpiresAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
@@ -433,6 +434,7 @@ export type FieldInputTypes = {
       readonly photoUrl: CodecTypes['pg/text@1']['input'];
       readonly sendCount: CodecTypes['pg/int4@1']['input'];
       readonly sentAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly socials: CodecTypes['pg/json@1']['input'] | null;
       readonly status: CodecTypes['pg/text@1']['input'];
       readonly teamId: CodecTypes['pg/text@1']['input'];
       readonly tokenExpiresAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
@@ -535,6 +537,7 @@ export type StorageColumnTypes = {
       readonly photoUrl: CodecTypes['pg/text@1']['output'];
       readonly sendCount: CodecTypes['pg/int4@1']['output'];
       readonly sentAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly socials: CodecTypes['pg/json@1']['output'] | null;
       readonly status: CodecTypes['pg/text@1']['output'];
       readonly teamId: CodecTypes['pg/text@1']['output'];
       readonly tokenExpiresAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
@@ -637,6 +640,7 @@ export type StorageColumnInputTypes = {
       readonly photoUrl: CodecTypes['pg/text@1']['input'];
       readonly sendCount: CodecTypes['pg/int4@1']['input'];
       readonly sentAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly socials: CodecTypes['pg/json@1']['input'] | null;
       readonly status: CodecTypes['pg/text@1']['input'];
       readonly teamId: CodecTypes['pg/text@1']['input'];
       readonly tokenExpiresAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
@@ -754,6 +758,7 @@ export namespace Models {
     photoUrl: CodecTypes['pg/text@1']['output'];
     sendCount: CodecTypes['pg/int4@1']['output'];
     sentAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+    socials: CodecTypes['pg/json@1']['output'] | null;
     status: CodecTypes['pg/text@1']['output'];
     teamId: CodecTypes['pg/text@1']['output'];
     tokenExpiresAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
@@ -1414,6 +1419,11 @@ type ContractBase = Omit<
                 readonly sentAt: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: true;
+                };
+                readonly socials: {
+                  readonly nativeType: 'json';
+                  readonly codecId: 'pg/json@1';
                   readonly nullable: true;
                 };
                 readonly status: {
@@ -2133,6 +2143,10 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamptz-temporal@1';
                 };
               };
+              readonly socials: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/json@1' };
+              };
               readonly status: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
@@ -2185,6 +2199,7 @@ type ContractBase = Omit<
                 readonly photoUrl: { readonly column: 'photoUrl' };
                 readonly sendCount: { readonly column: 'sendCount' };
                 readonly sentAt: { readonly column: 'sentAt' };
+                readonly socials: { readonly column: 'socials' };
                 readonly status: { readonly column: 'status' };
                 readonly teamId: { readonly column: 'teamId' };
                 readonly tokenExpiresAt: { readonly column: 'tokenExpiresAt' };

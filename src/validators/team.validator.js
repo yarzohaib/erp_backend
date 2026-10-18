@@ -45,6 +45,53 @@ const updateTeamSchema = z
     }
   );
 
+const memberSocialItemSchema = z
+  .object({
+    platform: z.enum(
+      [
+        "linkedin",
+        "x",
+        "twitter",
+        "facebook",
+        "instagram",
+        "github",
+        "youtube",
+        "website",
+      ],
+      { error: "Invalid social platform" }
+    ),
+    url: z
+      .string({ error: "URL is required" })
+      .trim()
+      .max(300, { error: "URL cannot exceed 300 characters" })
+      .refine(
+        (val) => {
+          try {
+            const parsed = new URL(val);
+            return parsed.protocol === "https:";
+          } catch {
+            return false;
+          }
+        },
+        {
+          error:
+            "URL must be a valid HTTPS URL (http, javascript, and data schemes are not allowed)",
+        }
+      ),
+  })
+  .strip();
+
+const memberSocialsSchema = z
+  .array(memberSocialItemSchema, { error: "Socials must be an array" })
+  .max(8, { error: "Socials cannot exceed 8 items" })
+  .refine(
+    (items) => {
+      const platforms = items.map((i) => i.platform);
+      return new Set(platforms).size === platforms.length;
+    },
+    { error: "Duplicate platforms are not allowed" }
+  );
+
 const memberSchema = z
   .object({
     name: z
@@ -79,6 +126,7 @@ const memberSchema = z
       })
       .optional()
       .default(""),
+    socials: memberSocialsSchema.optional().default([]),
   })
   .strip();
 
@@ -115,6 +163,7 @@ const updateMemberSchema = z
           "Photo URL must be empty or an HTTPS URL on authorized storage",
       })
       .optional(),
+    socials: memberSocialsSchema.optional(),
   })
   .strip()
   .refine(
@@ -123,10 +172,11 @@ const updateMemberSchema = z
       body.email !== undefined ||
       body.jobTitle !== undefined ||
       body.phone !== undefined ||
-      body.photoUrl !== undefined,
+      body.photoUrl !== undefined ||
+      body.socials !== undefined,
     {
       error:
-        "At least one field (name, email, jobTitle, phone, or photoUrl) must be provided for update",
+        "At least one field (name, email, jobTitle, phone, photoUrl, or socials) must be provided for update",
     }
   );
 

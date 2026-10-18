@@ -715,7 +715,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane.doe@example.com\",\n  \"jobTitle\": \"Lead Engineer\",\n  \"phone\": \"+1 555-0199\"\n}",
+              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane.doe@example.com\",\n  \"jobTitle\": \"Lead Engineer\",\n  \"phone\": \"+1 555-0199\",\n  \"socials\": [\n    {\n      \"platform\": \"linkedin\",\n      \"url\": \"https://linkedin.com/in/janedoe\"\n    },\n    {\n      \"platform\": \"github\",\n      \"url\": \"https://github.com/janedoe\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -763,7 +763,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"jobTitle\": \"Principal Engineer\",\n  \"phone\": \"+1 555-0200\"\n}",
+              "raw": "{\n  \"jobTitle\": \"Principal Engineer\",\n  \"phone\": \"+1 555-0200\",\n  \"socials\": [\n    {\n      \"platform\": \"linkedin\",\n      \"url\": \"https://linkedin.com/in/janedoe-updated\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -822,7 +822,161 @@
           }
         },
         {
-          "name": "7. Delete Team",
+          "name": "7. Send Invite to Team Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "const res = pm.response.json();",
+                  "const devUrl = res.devInviteUrl || res.data?.devInviteUrl;",
+                  "if (devUrl) {",
+                  "  const token = devUrl.split(\"/s/\")[1];",
+                  "  if (token) pm.environment.set(\"inviteToken\", token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/team/members/{{memberId}}/send",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "team",
+                "members",
+                "{{memberId}}",
+                "send"
+              ]
+            }
+          }
+        },
+        {
+          "name": "8. Revoke Invite for Team Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/team/members/{{memberId}}/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "team",
+                "members",
+                "{{memberId}}",
+                "revoke"
+              ]
+            }
+          }
+        },
+        {
+          "name": "9. Get Public Team Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "const res = pm.response.json();",
+                  "pm.test(\"Never return tokenHash or owner data\", function () {",
+                  "  pm.expect(res.data?.member?.tokenHash).to.be.undefined;",
+                  "  pm.expect(res.data?.ownerId).to.be.undefined;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/team/invite/{{inviteToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "team",
+                "invite",
+                "{{inviteToken}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "10. Accept Public Team Invite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "const res = pm.response.json();",
+                  "pm.test(\"Member is accepted\", function () {",
+                  "  pm.expect(res.data?.member?.status).to.eql(\"accepted\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/team/invite/{{inviteToken}}/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "public",
+                "team",
+                "invite",
+                "{{inviteToken}}",
+                "accept"
+              ]
+            }
+          }
+        },
+        {
+          "name": "11. Delete Team",
           "event": [
             {
               "listen": "test",

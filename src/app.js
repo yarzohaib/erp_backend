@@ -6,6 +6,7 @@ const authRoutes = require("./routes/auth.routes");
 const uploadRoutes = require("./routes/upload.routes");
 const signatureRoutes = require("./routes/signature.routes");
 const teamRoutes = require("./routes/team.routes");
+const publicTeamRoutes = require("./routes/publicTeam.routes");
 const errorHandler = require("./middleware/errorHandler.middleware");
 
 const app = express();
@@ -28,6 +29,7 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/uploads", uploadRoutes);
 app.use("/api/v1/signatures", signatureRoutes);
 app.use("/api/v1/team", teamRoutes);
+app.use("/api/v1/public/team", publicTeamRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({

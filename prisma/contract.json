@@ -888,6 +888,13 @@
                   "kind": "scalar"
                 }
               },
+              "socials": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/json@1",
+                  "kind": "scalar"
+                }
+              },
               "status": {
                 "nullable": false,
                 "type": {
@@ -973,6 +980,9 @@
                 },
                 "sentAt": {
                   "column": "sentAt"
+                },
+                "socials": {
+                  "column": "socials"
                 },
                 "status": {
                   "column": "status"
@@ -1973,6 +1983,11 @@
                   "nativeType": "timestamptz",
                   "nullable": true
                 },
+                "socials": {
+                  "codecId": "pg/json@1",
+                  "nativeType": "json",
+                  "nullable": true
+                },
                 "status": {
                   "codecId": "pg/text@1",
                   "default": {
@@ -2140,7 +2155,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "284703afb3bab3cbc6841e6320766bf7ad9e89f195921b73dfb9daceba61bfc0"
+    "storageHash": "5b738e1983d1786ab733f10d28e0d3d83dcdc2ca5bb88a767ea62871b77c7562"
   },
   "execution": {
     "executionHash": "883e2c80aab4489619a3a40c9f199046fe27141721f36df26650b07f360e4d35",

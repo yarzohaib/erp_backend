@@ -17,6 +17,7 @@ const TEMPLATES_DIR = path.join(__dirname, '..', 'templates', 'emails');
 const templates = {
   emailVerification: null,
   passwordReset: null,
+  teamInvite: null,
 };
 
 function getTemplate(name, filename) {
@@ -42,11 +43,13 @@ function escapeHtml(str) {
 
 /**
  * Replaces {{placeholder}} tokens in email templates
+ * Escapes values whose keys are listed in escapeKeys (defaulting to user-input fields)
  */
-function renderTemplate(templateContent, variables = {}) {
+function renderTemplate(templateContent, variables = {}, escapeKeys = ['firstName', 'memberName', 'ownerName', 'teamName']) {
   let output = templateContent;
   for (const [key, value] of Object.entries(variables)) {
-    const formattedValue = key === 'firstName' ? escapeHtml(value) : String(value ?? '');
+    const shouldEscape = Array.isArray(escapeKeys) ? escapeKeys.includes(key) : key === 'firstName';
+    const formattedValue = shouldEscape ? escapeHtml(value) : String(value ?? '');
     const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
     output = output.replace(placeholder, formattedValue);
   }
@@ -185,10 +188,56 @@ async function sendVerificationEmail({ to, firstName, actionUrl, expiresIn = '24
   });
 }
 
+/**
+ * Sends a team signature invite email with both HTML and plain-text body
+ */
+async function sendTeamInviteEmail({ to, memberName, ownerName, teamName, actionUrl, expiresIn = '14 days' }) {
+  const greetingMemberName = memberName || 'there';
+  const displayOwnerName = ownerName || 'Your team admin';
+  const displayTeamName = teamName || 'your team';
+
+  const rawHtml = getTemplate('teamInvite', 'team_invite.html');
+  const html = renderTemplate(
+    rawHtml,
+    {
+      memberName: greetingMemberName,
+      ownerName: displayOwnerName,
+      teamName: displayTeamName,
+      actionUrl,
+      expiresIn,
+    },
+    ['memberName', 'ownerName', 'teamName']
+  );
+
+  const text = [
+    `Hi ${greetingMemberName},`,
+    '',
+    `${displayOwnerName} has created a professional email signature for you on the ${displayTeamName} team.`,
+    '',
+    'View and install your new signature using the secure link below:',
+    '',
+    actionUrl,
+    '',
+    `This invite link will expire in ${expiresIn}.`,
+    '',
+    "If you weren't expecting this signature invite, you can safely ignore this email.",
+    '',
+    '© 2026 Sig Signature. All rights reserved.',
+  ].join('\n');
+
+  return sendEmail({
+    to,
+    subject: `${displayOwnerName} shared your new email signature`,
+    html,
+    text,
+  });
+}
+
 module.exports = {
   sendEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
+  sendTeamInviteEmail,
   escapeHtml,
   renderTemplate,
 };

@@ -1,10 +1,40 @@
+const crypto = require("crypto");
+const { Temporal } = require("@js-temporal/polyfill");
 const teamRepository = require("../repositories/team.repository");
 const signatureRepository = require("../repositories/signature.repository");
+const userRepository = require("../repositories/user.repository");
+const mailService = require("./mail.service");
 const {
   NotFoundError,
   ForbiddenError,
   ConflictError,
+  BadRequestError,
+  TooManyRequestsError,
+  GoneError,
+  BadGatewayError,
 } = require("../utils/errors");
+
+/**
+ * Checks whether a team design has actual signature content
+ */
+function hasSignatureContent(team) {
+  if (!team || !team.data || typeof team.data !== "object") return false;
+  const d = team.data;
+  if (Array.isArray(d.elements) && d.elements.length > 0) return true;
+  if (d.name?.trim() || d.title?.trim() || d.company?.trim() || d.email?.trim() || d.phone?.trim()) return true;
+  if (Array.isArray(d.extras) && d.extras.length > 0) return true;
+  return false;
+}
+
+/**
+ * Masks an email address for public responses (e.g. z***@gmail.com)
+ */
+function maskEmail(email) {
+  if (!email || typeof email !== "string" || !email.includes("@")) return "";
+  const [local, domain] = email.split("@");
+  if (!local) return `***@${domain || ""}`;
+  return `${local[0]}***@${domain}`;
+}
 
 const teamService = {
   /**
@@ -123,6 +153,7 @@ const teamService = {
       jobTitle: input.jobTitle !== undefined ? input.jobTitle.trim() : "",
       phone: input.phone !== undefined ? input.phone.trim() : "",
       photoUrl: input.photoUrl !== undefined ? input.photoUrl.trim() : "",
+      socials: Array.isArray(input.socials) ? input.socials : [],
       status: "draft",
     });
   },
@@ -156,6 +187,9 @@ const teamService = {
     }
     if (input.photoUrl !== undefined) {
       updatePayload.photoUrl = input.photoUrl.trim();
+    }
+    if (input.socials !== undefined) {
+      updatePayload.socials = Array.isArray(input.socials) ? input.socials : [];
     }
 
     if (input.email !== undefined) {
@@ -200,6 +234,313 @@ const teamService = {
 
     await teamRepository.deleteMember(memberId);
     return true;
+  },
+
+  /**
+   * Send or resend an email invite to a team member.
+   * Generates a secure raw token, hashes it, checks rate limits,
+   * sends the email, and updates the member status to "sent".
+   */
+  async sendInvite(userId, memberId) {
+    const team = await teamRepository.findByOwner(userId);
+    if (!team) {
+      throw new NotFoundError("Team not found", "TEAM_NOT_FOUND");
+    }
+
+    const member = await teamRepository.findMemberById(memberId);
+    if (!member || member.teamId !== team.id) {
+      throw new NotFoundError("Team member not found", "TEAM_MEMBER_NOT_FOUND");
+    }
+
+    if (!hasSignatureContent(team)) {
+      throw new BadRequestError(
+        "Team signature template has no content. Please add signature details before sending invites.",
+        "TEAM_NOT_READY"
+      );
+    }
+
+    // Abuse limit: Cooldown
+    const cooldownSeconds = Number(process.env.TEAM_SEND_COOLDOWN_SECONDS || 60);
+    if (member.sentAt) {
+      const sentAtMs = new Date(member.sentAt.toString()).getTime();
+      const elapsedSeconds = Math.floor((Date.now() - sentAtMs) / 1000);
+      if (elapsedSeconds < cooldownSeconds) {
+        const waitSeconds = cooldownSeconds - elapsedSeconds;
+        throw new TooManyRequestsError(
+          `Please wait ${waitSeconds} seconds before resending an invite to this member.`,
+          "TEAM_SEND_COOLDOWN"
+        );
+      }
+    }
+
+    // Abuse limit: Max sends per member
+    const maxPerMember = Number(process.env.TEAM_SEND_MAX_PER_MEMBER || 5);
+    if ((member.sendCount || 0) >= maxPerMember) {
+      throw new ForbiddenError(
+        `Maximum invite send limit reached for this member (${maxPerMember} sends).`,
+        "TEAM_SEND_LIMIT_REACHED"
+      );
+    }
+
+    // Abuse limit: Daily send limit across team in last 24 hours
+    const dailyLimit = Number(process.env.TEAM_SEND_DAILY_LIMIT || 10);
+    const allMembers = await teamRepository.findMembersByTeam(team.id);
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const recentSends = allMembers.filter((m) => {
+      if (!m.sentAt) return false;
+      return new Date(m.sentAt.toString()).getTime() >= oneDayAgo;
+    });
+    if (recentSends.length >= dailyLimit) {
+      throw new TooManyRequestsError(
+        `Daily team invite limit reached (${dailyLimit} invites per 24 hours). Please try again tomorrow.`,
+        "TEAM_SEND_DAILY_LIMIT"
+      );
+    }
+
+    // Token creation
+    const rawToken = crypto.randomBytes(32).toString("base64url");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const ttlDays = Number(process.env.TEAM_INVITE_TTL_DAYS || 14);
+    const tokenExpiresAt = Temporal.Now.instant().add({ hours: ttlDays * 24 });
+    const frontendBase = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/+$/, "");
+    const actionUrl = `${frontendBase}/s/${rawToken}`;
+
+    // Get owner display name
+    const user = await userRepository.findFirst({ id: userId });
+    const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() || "Team Admin";
+
+    // Handle suppressed mail mode
+    if (process.env.MAIL_ENABLED !== "true") {
+      if (process.env.NODE_ENV === "production") {
+        return {
+          delivered: false,
+          suppressed: true,
+          member,
+        };
+      }
+
+      // In non-production (dev/test): update member so invite flow can be tested locally
+      const updatedMember = await teamRepository.updateMember(member.id, {
+        status: "sent",
+        sentAt: Temporal.Now.instant(),
+        sendCount: (member.sendCount || 0) + 1,
+        tokenHash,
+        tokenExpiresAt,
+      });
+
+      return {
+        delivered: false,
+        suppressed: true,
+        devInviteUrl: actionUrl,
+        member: updatedMember,
+      };
+    }
+
+    // Mail enabled: attempt delivery via SES
+    try {
+      await mailService.sendTeamInviteEmail({
+        to: member.email,
+        memberName: member.name,
+        ownerName,
+        teamName: team.name,
+        actionUrl,
+        expiresIn: `${ttlDays} days`,
+      });
+    } catch (err) {
+      console.error("[Team Service] Error sending team invite email via SES:", err.name, err.message);
+      // If sending fails (e.g. SES MessageRejected or sandbox unverified):
+      // do NOT change the member, and return 502 with code TEAM_EMAIL_REJECTED
+      throw new BadGatewayError(
+        "The email could not be delivered. While email sending is in test mode only verified addresses can receive messages.",
+        "TEAM_EMAIL_REJECTED"
+      );
+    }
+
+    // Only after email is sent successfully:
+    const updatedMember = await teamRepository.updateMember(member.id, {
+      status: "sent",
+      sentAt: Temporal.Now.instant(),
+      sendCount: (member.sendCount || 0) + 1,
+      tokenHash,
+      tokenExpiresAt,
+    });
+
+    return {
+      delivered: true,
+      member: updatedMember,
+    };
+  },
+
+  /**
+   * Revoke an active invite for a team member.
+   * Sets status to "revoked" and keeps tokenHash so public endpoints return 410.
+   */
+  async revokeInvite(userId, memberId) {
+    const team = await teamRepository.findByOwner(userId);
+    if (!team) {
+      throw new NotFoundError("Team not found", "TEAM_NOT_FOUND");
+    }
+
+    const member = await teamRepository.findMemberById(memberId);
+    if (!member || member.teamId !== team.id) {
+      throw new NotFoundError("Team member not found", "TEAM_MEMBER_NOT_FOUND");
+    }
+
+    const updatedMember = await teamRepository.updateMember(member.id, {
+      status: "revoked",
+    });
+
+    return updatedMember;
+  },
+
+  /**
+   * Look up public invite details by raw invite token.
+   * Unknown token: 404 INVITE_NOT_FOUND
+   * Revoked token: 410 INVITE_REVOKED
+   * Sent & expired token: 410 INVITE_EXPIRED
+   * Draft member: 404 INVITE_NOT_FOUND
+   * Accepted members retain access even after expiration date.
+   */
+  async getPublicInvite(rawToken) {
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const member = await teamRepository.findMemberByTokenHash(tokenHash);
+    if (!member) {
+      throw new NotFoundError("Invite not found or invalid link.", "INVITE_NOT_FOUND");
+    }
+
+    const team = await teamRepository.findTeamById(member.teamId);
+    if (!team) {
+      throw new NotFoundError("Invite not found or invalid link.", "INVITE_NOT_FOUND");
+    }
+
+    if (member.status === "revoked") {
+      throw new GoneError("This invite has been revoked by the team owner.", "INVITE_REVOKED");
+    }
+
+    if (member.status === "draft") {
+      throw new NotFoundError("Invite not found or invalid link.", "INVITE_NOT_FOUND");
+    }
+
+    // If status is "sent" and expired: 410 INVITE_EXPIRED
+    if (member.status === "sent" && member.tokenExpiresAt) {
+      const expiresAtDate = new Date(member.tokenExpiresAt.toString());
+      if (expiresAtDate.getTime() <= Date.now()) {
+        throw new GoneError(
+          "This invite link has expired. Please request a new invite from the team owner.",
+          "INVITE_EXPIRED"
+        );
+      }
+    }
+
+    return {
+      member: {
+        name: member.name,
+        maskedEmail: maskEmail(member.email),
+        jobTitle: member.jobTitle || "",
+        phone: member.phone || "",
+        photoUrl: member.photoUrl || "",
+        socials: Array.isArray(member.socials) ? member.socials : [],
+        status: member.status,
+      },
+      team: {
+        name: team.name,
+        kind: team.kind,
+        templateId: team.templateId,
+        templateVersion: team.templateVersion,
+        data: team.data,
+      },
+      expiresAt: member.tokenExpiresAt
+        ? (typeof member.tokenExpiresAt.toISOString === "function" ? member.tokenExpiresAt.toISOString() : String(member.tokenExpiresAt))
+        : null,
+    };
+  },
+
+  /**
+   * Accept an invite by raw token.
+   * If status is "sent", sets status "accepted" and acceptedAt = now.
+   * If already accepted, returns same success (idempotent).
+   * Draft members cannot be accepted (404).
+   */
+  async acceptPublicInvite(rawToken) {
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const member = await teamRepository.findMemberByTokenHash(tokenHash);
+    if (!member) {
+      throw new NotFoundError("Invite not found or invalid link.", "INVITE_NOT_FOUND");
+    }
+
+    const team = await teamRepository.findTeamById(member.teamId);
+    if (!team) {
+      throw new NotFoundError("Invite not found or invalid link.", "INVITE_NOT_FOUND");
+    }
+
+    if (member.status === "revoked") {
+      throw new GoneError("This invite has been revoked by the team owner.", "INVITE_REVOKED");
+    }
+
+    if (member.status === "draft") {
+      throw new NotFoundError("Invite not found or invalid link.", "INVITE_NOT_FOUND");
+    }
+
+    if (member.status === "sent") {
+      if (member.tokenExpiresAt) {
+        const expiresAtDate = new Date(member.tokenExpiresAt.toString());
+        if (expiresAtDate.getTime() <= Date.now()) {
+          throw new GoneError(
+            "This invite link has expired. Please request a new invite from the team owner.",
+            "INVITE_EXPIRED"
+          );
+        }
+      }
+
+      const acceptedAt = Temporal.Now.instant();
+      const updatedMember = await teamRepository.updateMember(member.id, {
+        status: "accepted",
+        acceptedAt,
+      });
+
+      return {
+        member: {
+          name: updatedMember.name,
+          maskedEmail: maskEmail(updatedMember.email),
+          jobTitle: updatedMember.jobTitle || "",
+          phone: updatedMember.phone || "",
+          photoUrl: updatedMember.photoUrl || "",
+          socials: Array.isArray(updatedMember.socials) ? updatedMember.socials : [],
+          status: "accepted",
+        },
+        team: {
+          name: team.name,
+          kind: team.kind,
+          templateId: team.templateId,
+          templateVersion: team.templateVersion,
+          data: team.data,
+        },
+        acceptedAt: acceptedAt.toString(),
+      };
+    }
+
+    // Already accepted (idempotent)
+    return {
+      member: {
+        name: member.name,
+        maskedEmail: maskEmail(member.email),
+        jobTitle: member.jobTitle || "",
+        phone: member.phone || "",
+        photoUrl: member.photoUrl || "",
+        socials: Array.isArray(member.socials) ? member.socials : [],
+        status: "accepted",
+      },
+      team: {
+        name: team.name,
+        kind: team.kind,
+        templateId: team.templateId,
+        templateVersion: team.templateVersion,
+        data: team.data,
+      },
+      acceptedAt: member.acceptedAt
+        ? (typeof member.acceptedAt.toISOString === "function" ? member.acceptedAt.toISOString() : String(member.acceptedAt))
+        : new Date().toISOString(),
+    };
   },
 };
 

@@ -156,6 +156,7 @@ model TeamMember {
   jobTitle       String    @default("")
   phone          String    @default("")
   photoUrl       String    @default("")
+  socials        Json?
   status         String    @default("draft")
   tokenHash      String?   @unique
   tokenExpiresAt DateTime?

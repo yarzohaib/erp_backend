@@ -103,4 +103,28 @@ router.delete(
   teamController.removeMember
 );
 
+/**
+ * @route   POST /api/v1/team/members/:memberId/send
+ * @desc    Send or resend invite email to a team member
+ * @access  Private
+ */
+router.post(
+  "/members/:memberId/send",
+  writeRateLimiter,
+  validateParams(teamMemberIdParamSchema),
+  teamController.sendInvite
+);
+
+/**
+ * @route   POST /api/v1/team/members/:memberId/revoke
+ * @desc    Revoke invite link for a team member
+ * @access  Private
+ */
+router.post(
+  "/members/:memberId/revoke",
+  writeRateLimiter,
+  validateParams(teamMemberIdParamSchema),
+  teamController.revokeInvite
+);
+
 module.exports = router;
