@@ -6,6 +6,7 @@ model User {
 
   firstName  String
   lastName   String?
+  companyName String?
 
   isActive   Boolean   @default(true)
   isVerified Boolean   @default(false)
@@ -20,6 +21,7 @@ model User {
   oauthLoginCodes     OAuthLoginCode[]
   signatures          Signature[]
   team                Team?
+  settings            UserSettings?
 }
 
 model Session {
@@ -171,4 +173,21 @@ model TeamMember {
 
   @@unique([teamId, email])
   @@index([teamId])
+}
+
+model UserSettings {
+  userId               String    @id
+  defaultTemplateId    String?
+  defaultExportFormat  String    @default("html")
+  signatureFont        String    @default("Arimo")
+  brandColor           String    @default("#245FD4")
+  includePhoto         Boolean   @default(true)
+  notifyProductUpdates Boolean   @default(true)
+  notifyTips           Boolean   @default(false)
+  premiumWaitlistAt    DateTime?
+
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @default(now())
+
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

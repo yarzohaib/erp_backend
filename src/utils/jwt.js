@@ -5,13 +5,17 @@ const JWT_ALGORITHM = "HS256";
 const JWT_ISSUER = process.env.JWT_ISSUER || "sigsignature.com";
 const JWT_AUDIENCE = process.env.JWT_AUDIENCE || "sigsignature-app";
 
-function generateAccessToken(user) {
+function generateAccessToken(user, sessionId = null) {
+  const payload = {
+    sub: user.id,
+    email: user.email,
+    type: "access",
+  };
+  if (sessionId) {
+    payload.sessionId = sessionId;
+  }
   return jwt.sign(
-    {
-      sub: user.id,
-      email: user.email,
-      type: "access",
-    },
+    payload,
     process.env.JWT_ACCESS_SECRET,
     {
       algorithm: JWT_ALGORITHM,

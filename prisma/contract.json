@@ -39,6 +39,10 @@
     "User": {
       "model": "User",
       "namespace": "public"
+    },
+    "UserSettings": {
+      "model": "UserSettings",
+      "namespace": "public"
     }
   },
   "domain": {
@@ -1006,6 +1010,13 @@
           },
           "User": {
             "fields": {
+              "companyName": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "createdAt": {
                 "nullable": false,
                 "type": {
@@ -1146,6 +1157,22 @@
                   "namespace": "public"
                 }
               },
+              "settings": {
+                "cardinality": "1:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "userId"
+                  ]
+                },
+                "to": {
+                  "model": "UserSettings",
+                  "namespace": "public"
+                }
+              },
               "signatures": {
                 "cardinality": "1:N",
                 "on": {
@@ -1180,6 +1207,9 @@
             },
             "storage": {
               "fields": {
+                "companyName": {
+                  "column": "companyName"
+                },
                 "createdAt": {
                   "column": "createdAt"
                 },
@@ -1210,6 +1240,144 @@
               },
               "namespaceId": "public",
               "table": "User"
+            }
+          },
+          "UserSettings": {
+            "fields": {
+              "brandColor": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "defaultExportFormat": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "defaultTemplateId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "includePhoto": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "notifyProductUpdates": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "notifyTips": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "premiumWaitlistAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "signatureFont": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "userId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "user": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "userId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "brandColor": {
+                  "column": "brandColor"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "defaultExportFormat": {
+                  "column": "defaultExportFormat"
+                },
+                "defaultTemplateId": {
+                  "column": "defaultTemplateId"
+                },
+                "includePhoto": {
+                  "column": "includePhoto"
+                },
+                "notifyProductUpdates": {
+                  "column": "notifyProductUpdates"
+                },
+                "notifyTips": {
+                  "column": "notifyTips"
+                },
+                "premiumWaitlistAt": {
+                  "column": "premiumWaitlistAt"
+                },
+                "signatureFont": {
+                  "column": "signatureFont"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                },
+                "userId": {
+                  "column": "userId"
+                }
+              },
+              "namespaceId": "public",
+              "table": "UserSettings"
             }
           }
         }
@@ -2072,6 +2240,11 @@
             },
             "User": {
               "columns": {
+                "companyName": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "default": {
@@ -2148,6 +2321,123 @@
                   ]
                 }
               ]
+            },
+            "UserSettings": {
+              "columns": {
+                "brandColor": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "#245FD4"
+                  },
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "defaultExportFormat": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "html"
+                  },
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "defaultTemplateId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
+                "includePhoto": {
+                  "codecId": "pg/bool@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": true
+                  },
+                  "nativeType": "bool",
+                  "nullable": false
+                },
+                "notifyProductUpdates": {
+                  "codecId": "pg/bool@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": true
+                  },
+                  "nativeType": "bool",
+                  "nullable": false
+                },
+                "notifyTips": {
+                  "codecId": "pg/bool@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": false
+                  },
+                  "nativeType": "bool",
+                  "nullable": false
+                },
+                "premiumWaitlistAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nativeType": "timestamptz",
+                  "nullable": true
+                },
+                "signatureFont": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "Arimo"
+                  },
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "updatedAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "userId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "UserSettings"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "User"
+                  }
+                }
+              ],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "userId"
+                ]
+              },
+              "uniques": []
             }
           }
         },
@@ -2155,7 +2445,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5b738e1983d1786ab733f10d28e0d3d83dcdc2ca5bb88a767ea62871b77c7562"
+    "storageHash": "6a3e7a98508a9a7c29c05b1001a6e973a39426dacf3e7680d996506560f6c6ef"
   },
   "execution": {
     "executionHash": "883e2c80aab4489619a3a40c9f199046fe27141721f36df26650b07f360e4d35",

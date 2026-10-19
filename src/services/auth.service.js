@@ -21,6 +21,11 @@ const sessionRepository = require("../repositories/session.repository");
 const userRepository = require("../repositories/user.repository");
 const emailVerificationRepository = require("../repositories/email-verification.repository");
 const mailService = require("./mail.service");
+const {
+  parseDeviceLabel,
+  maskIpAddress,
+  resolveCurrentSessionId,
+} = require("../utils/sessionHelper");
 
 const RESET_TOKEN_TTL_MINUTES = 30;
 const VERIFICATION_TOKEN_TTL_HOURS = 24;
@@ -67,16 +72,14 @@ function isTokenExpired(expiresAt) {
 }
 
 async function issueUserSession(user, { userAgent, ipAddress, deviceName } = {}) {
-  const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
-
   const refreshTokenHash = hashRefreshToken(refreshToken);
 
   const expiresAt = Temporal.Instant.fromEpochMilliseconds(
     Date.now() + SESSION_TTL_MS
   );
 
-  await sessionRepository.create({
+  const session = await sessionRepository.create({
     userId: user.id,
     refreshTokenHash,
     expiresAt,
@@ -85,12 +88,15 @@ async function issueUserSession(user, { userAgent, ipAddress, deviceName } = {})
     deviceName: deviceName || null,
   });
 
+  const accessToken = generateAccessToken(user, session?.id || null);
+
   return {
     user: {
       id: user.id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
+      companyName: user.companyName ?? null,
     },
     tokens: {
       accessToken,
@@ -158,6 +164,7 @@ const authService = {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
+      companyName: user.companyName ?? null,
     };
   },
 
@@ -175,6 +182,7 @@ const authService = {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
+      companyName: user.companyName ?? null,
       isActive: user.isActive,
       isVerified: user.isVerified,
       createdAt: user.createdAt,
@@ -249,14 +257,19 @@ const authService = {
     return { success: true };
   },
 
-  async getSessions(userId) {
+  async getSessions(userId, req = null) {
     const sessions = await sessionRepository.findByUserId(userId);
+    const currentSessionId = req ? resolveCurrentSessionId(req, sessions) : null;
+
     return sessions.map((session) => ({
       id: session.id,
       userId: session.userId,
+      isCurrent: Boolean(currentSessionId && session.id === currentSessionId),
+      device: parseDeviceLabel(session.userAgent) || session.deviceName || "Unknown device",
       deviceName: session.deviceName,
       userAgent: session.userAgent,
-      ipAddress: session.ipAddress,
+      ipAddress: maskIpAddress(session.ipAddress),
+      lastUsedAt: session.updatedAt || session.createdAt,
       expiresAt: session.expiresAt,
       revokedAt: session.revokedAt,
       createdAt: session.createdAt,
@@ -276,6 +289,35 @@ const authService = {
     }
 
     return { success: true };
+  },
+
+  async revokeOtherSessions(userId, req = null) {
+    const sessions = await sessionRepository.findByUserId(userId);
+    const currentSessionId = req ? resolveCurrentSessionId(req, sessions) : null;
+    const count = await sessionRepository.revokeOthersByUserId(userId, currentSessionId);
+
+    // Send security notification email
+    const user = await userRepository.findFirst({ id: userId });
+    if (user) {
+      const userAgent = req?.headers?.["user-agent"] || "";
+      const ip = req?.ip || req?.headers?.["x-forwarded-for"] || "";
+      mailService
+        .sendSessionsRevokedEmail({
+          to: user.email,
+          firstName: user.firstName,
+          time: new Date().toUTCString(),
+          deviceInfo: parseDeviceLabel(userAgent),
+          ipAddress: maskIpAddress(ip) || "Unknown IP",
+        })
+        .catch((err) => {
+          console.error(
+            "[Auth Service] Failed to send sessions revoked email:",
+            err.message || err
+          );
+        });
+    }
+
+    return { count };
   },
 
   /**
@@ -342,9 +384,7 @@ const authService = {
       throw new ForbiddenError("Please verify your email address before continuing.", "EMAIL_NOT_VERIFIED");
     }
 
-    const newAccessToken = generateAccessToken(user);
     const newRefreshToken = generateRefreshToken(user);
-
     const newRefreshTokenHash = hashRefreshToken(newRefreshToken);
 
     const newExpiresAt = Temporal.Instant.fromEpochMilliseconds(
@@ -352,7 +392,7 @@ const authService = {
     );
 
     // Preserve/update client metadata on rotation
-    await sessionRepository.create({
+    const newSession = await sessionRepository.create({
       userId: user.id,
       refreshTokenHash: newRefreshTokenHash,
       expiresAt: newExpiresAt,
@@ -360,6 +400,8 @@ const authService = {
       ipAddress: ipAddress || session.ipAddress || null,
       deviceName: session.deviceName || null,
     });
+
+    const newAccessToken = generateAccessToken(user, newSession?.id || null);
 
     return {
       accessToken: newAccessToken,
@@ -369,6 +411,7 @@ const authService = {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        companyName: user.companyName ?? null,
       },
     };
   },

@@ -110,6 +110,39 @@ const uploadPresignLimiter = createRateLimiter({
   },
 });
 
+// 7. Password change limiter: 10 requests per 15 minutes (strict like login)
+const changePasswordLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: "Too many password change attempts. Please try again after 15 minutes.",
+  keyGenerator: (req) => {
+    const userId = req.user?.id || req.user?.sub;
+    return userId ? `pwd:${userId}` : req.ip || "unknown";
+  },
+});
+
+// 8. Account export limiter: 3 requests per hour
+const accountExportLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  message: "Too many account export requests. Please try again in an hour.",
+  keyGenerator: (req) => {
+    const userId = req.user?.id || req.user?.sub;
+    return userId ? `export:${userId}` : req.ip || "unknown";
+  },
+});
+
+// 9. Account delete limiter: 3 requests per hour
+const accountDeleteLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  message: "Too many account deletion attempts. Please try again later.",
+  keyGenerator: (req) => {
+    const userId = req.user?.id || req.user?.sub;
+    return userId ? `delete:${userId}` : req.ip || "unknown";
+  },
+});
+
 module.exports = {
   createRateLimiter,
   loginLimiter,
@@ -118,4 +151,7 @@ module.exports = {
   resendVerificationLimiter,
   generalAuthLimiter,
   uploadPresignLimiter,
+  changePasswordLimiter,
+  accountExportLimiter,
+  accountDeleteLimiter,
 };

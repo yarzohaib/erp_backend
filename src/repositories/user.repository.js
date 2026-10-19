@@ -1,3 +1,4 @@
+const { Temporal } = require("@js-temporal/polyfill");
 const db = require("../config/prisma");
 
 const User = db.orm.public.User;
@@ -17,6 +18,16 @@ const userRepository = {
 
   async createMany(data) {
     return User.createAll(data);
+  },
+
+  async updateProfile(userId, updateData) {
+    const now = Temporal.Now.instant();
+    const payload = {
+      ...updateData,
+      updatedAt: now,
+    };
+    await User.where({ id: userId }).update(payload);
+    return User.first({ id: userId });
   },
 
   async updatePassword(userId, passwordHash) {

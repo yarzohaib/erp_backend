@@ -17,7 +17,9 @@ const sessionRepository = {
   },
 
   async findByUserId(userId) {
-    return Session.where({ userId }).all();
+    return Session.where({ userId })
+      .orderBy((s) => s.createdAt.desc())
+      .all();
   },
 
   async revokeById(id) {
@@ -63,6 +65,35 @@ const sessionRepository = {
       .build();
 
     return db.runtime().execute(query);
+  },
+
+  async revokeOthersByUserId(userId, currentSessionId) {
+    const revokedAt = Temporal.Now.instant().toString();
+
+    let query;
+    if (currentSessionId) {
+      query = db.raw.sql`
+        UPDATE "Session"
+        SET "revokedAt" = ${revokedAt}::timestamptz
+        WHERE "userId" = ${userId}
+          AND "id" != ${currentSessionId}
+          AND "revokedAt" IS NULL
+      `
+        .affectedCount()
+        .build();
+    } else {
+      query = db.raw.sql`
+        UPDATE "Session"
+        SET "revokedAt" = ${revokedAt}::timestamptz
+        WHERE "userId" = ${userId}
+          AND "revokedAt" IS NULL
+      `
+        .affectedCount()
+        .build();
+    }
+
+    const result = await db.runtime().execute(query);
+    return result?.affectedRows ?? result?.rowCount ?? result ?? 0;
   },
 
   async deleteById(id) {

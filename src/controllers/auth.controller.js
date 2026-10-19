@@ -167,7 +167,8 @@ const authController = {
 
   async sessions(req, res, next) {
     try {
-      const sessions = await authService.getSessions(req.user.sub);
+      const userId = req.user.sub || req.user.id;
+      const sessions = await authService.getSessions(userId, req);
 
       return res.status(200).json({
         success: true,
@@ -183,11 +184,28 @@ const authController = {
   async revokeSession(req, res, next) {
     try {
       const { id } = req.params;
-      await authService.revokeSession(req.user.sub, id);
+      const userId = req.user.sub || req.user.id;
+      await authService.revokeSession(userId, id);
 
       return res.status(200).json({
         success: true,
         message: "Session revoked successfully",
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async revokeOtherSessions(req, res, next) {
+    try {
+      const userId = req.user.sub || req.user.id;
+      const result = await authService.revokeOtherSessions(userId, req);
+
+      return res.status(200).json({
+        success: true,
+        message: "Other sessions revoked successfully",
+        count: result.count,
+        revokedCount: result.count,
       });
     } catch (error) {
       next(error);

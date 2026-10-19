@@ -49,6 +49,7 @@ router.post("/logout", authController.logout);
 router.get("/me", authenticate, authController.me);
 router.post("/logout-all", authenticate, authController.logoutAll);
 router.get("/sessions", authenticate, authController.sessions);
+router.post("/sessions/revoke-others", authenticate, authController.revokeOtherSessions);
 router.delete("/sessions/:id", authenticate, authController.revokeSession);
 
 // Password recovery & email verification with abuse/cost protection

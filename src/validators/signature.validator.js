@@ -69,9 +69,14 @@ const isValidHttpUrl = (val) => {
 };
 
 /**
- * Validates social URL: must be empty string or a valid HTTP/HTTPS URL (max 300 chars)
+ * Validates social URL: must be empty string, a social handle (e.g. @handle), or a valid HTTP/HTTPS URL (max 300 chars)
  */
 const isValidSocialUrl = (val) => {
+  if (val === "" || val === undefined || val === null) return true;
+  if (typeof val !== "string") return false;
+  const trimmed = val.trim();
+  if (!trimmed) return true;
+  if (/^@?[\w.-]+$/.test(trimmed)) return true;
   return isValidHttpUrl(val);
 };
 
@@ -544,9 +549,9 @@ const signatureDataSchema = z
       error:
         "Font family must be one of: Arial, Georgia, Verdana, Trebuchet MS, Tahoma, Inter, Roboto, DM Sans, Montserrat, Commissioner",
     }),
-    layout: z.enum(["two-column", "horizontal", "compact", "single"], {
+    layout: z.enum(["two-column", "horizontal", "compact", "single", "corporate-card"], {
       error:
-        "Layout must be one of 'two-column', 'horizontal', 'compact', or 'single'",
+        "Layout must be one of 'two-column', 'horizontal', 'compact', 'single', or 'corporate-card'",
     }),
     socialIconsStyle: z.enum(["filled", "outline", "circle", "minimal"], {
       error:

@@ -1,0 +1,125 @@
+[
+  {
+    "id": "table.UserSettings",
+    "label": "Create table \"UserSettings\"",
+    "summary": "Creates table \"UserSettings\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "UserSettings"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"UserSettings\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserSettings\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"UserSettings\"",
+        "sql": "CREATE TABLE \"public\".\"UserSettings\" (\n  \"brandColor\" text DEFAULT '#245FD4' NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"defaultExportFormat\" text DEFAULT 'html' NOT NULL,\n  \"defaultTemplateId\" text,\n  \"includePhoto\" bool DEFAULT true NOT NULL,\n  \"notifyProductUpdates\" bool DEFAULT true NOT NULL,\n  \"notifyTips\" bool DEFAULT false NOT NULL,\n  \"premiumWaitlistAt\" timestamptz,\n  \"signatureFont\" text DEFAULT 'Arimo' NOT NULL,\n  \"updatedAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"userId\" text NOT NULL,\n  PRIMARY KEY (\"userId\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"UserSettings\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserSettings\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.User.companyName",
+    "label": "Add column \"companyName\" to \"User\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "companyName",
+        "table": "User"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"companyName\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "User",
+          "companyName"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"companyName\"",
+        "sql": "ALTER TABLE \"public\".\"User\" ADD COLUMN \"companyName\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"companyName\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "User",
+          "companyName"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.UserSettings.UserSettings_userId_fkey",
+    "label": "Add foreign key \"UserSettings_userId_fkey\" on \"UserSettings\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "UserSettings_userId_fkey",
+        "table": "UserSettings"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"UserSettings_userId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserSettings_userId_fkey",
+          "public",
+          "\"public\".\"UserSettings\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"UserSettings_userId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"UserSettings\"\nADD CONSTRAINT \"UserSettings_userId_fkey\"\nFOREIGN KEY (\"userId\")\nREFERENCES \"public\".\"User\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"UserSettings_userId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserSettings_userId_fkey",
+          "public",
+          "\"public\".\"UserSettings\""
+        ]
+      }
+    ]
+  }
+]

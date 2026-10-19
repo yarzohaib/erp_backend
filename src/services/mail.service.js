@@ -18,6 +18,9 @@ const templates = {
   emailVerification: null,
   passwordReset: null,
   teamInvite: null,
+  securityPasswordChanged: null,
+  securitySessionsRevoked: null,
+  accountDeleted: null,
 };
 
 function getTemplate(name, filename) {
@@ -45,7 +48,7 @@ function escapeHtml(str) {
  * Replaces {{placeholder}} tokens in email templates
  * Escapes values whose keys are listed in escapeKeys (defaulting to user-input fields)
  */
-function renderTemplate(templateContent, variables = {}, escapeKeys = ['firstName', 'memberName', 'ownerName', 'teamName']) {
+function renderTemplate(templateContent, variables = {}, escapeKeys = ['firstName', 'memberName', 'ownerName', 'teamName', 'time', 'deviceInfo', 'ipAddress']) {
   let output = templateContent;
   for (const [key, value] of Object.entries(variables)) {
     const shouldEscape = Array.isArray(escapeKeys) ? escapeKeys.includes(key) : key === 'firstName';
@@ -233,11 +236,118 @@ async function sendTeamInviteEmail({ to, memberName, ownerName, teamName, action
   });
 }
 
+/**
+ * Sends a security alert email when the user's password is changed.
+ */
+async function sendPasswordChangedEmail({ to, firstName, time, deviceInfo, ipAddress, resetUrl }) {
+  const greetingName = firstName || 'there';
+  const frontendBase = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const finalResetUrl = resetUrl || `${frontendBase}/forgot`;
+  const rawHtml = getTemplate('securityPasswordChanged', 'security_password_changed.html');
+  const html = renderTemplate(rawHtml, {
+    firstName: greetingName,
+    time: time || new Date().toUTCString(),
+    deviceInfo: deviceInfo || 'Unknown device',
+    ipAddress: ipAddress || 'Unknown IP',
+    resetUrl: finalResetUrl,
+  });
+
+  const text = [
+    `Hi ${greetingName},`,
+    '',
+    'Security Alert: Your Sig Signature password was recently changed.',
+    '',
+    `Time: ${time || new Date().toUTCString()}`,
+    `Device: ${deviceInfo || 'Unknown device'}`,
+    `IP Address: ${ipAddress || 'Unknown IP'}`,
+    '',
+    `If this was not you, reset your password now: ${finalResetUrl}`,
+    '',
+    '© 2026 Sig Signature. All rights reserved.',
+  ].join('\n');
+
+  return sendEmail({
+    to,
+    subject: 'Security Alert: Your Sig Signature password was changed',
+    html,
+    text,
+  });
+}
+
+/**
+ * Sends a security notification email when other sessions are revoked.
+ */
+async function sendSessionsRevokedEmail({ to, firstName, time, deviceInfo, ipAddress, resetUrl }) {
+  const greetingName = firstName || 'there';
+  const frontendBase = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const finalResetUrl = resetUrl || `${frontendBase}/forgot`;
+  const rawHtml = getTemplate('securitySessionsRevoked', 'security_sessions_revoked.html');
+  const html = renderTemplate(rawHtml, {
+    firstName: greetingName,
+    time: time || new Date().toUTCString(),
+    deviceInfo: deviceInfo || 'Unknown device',
+    ipAddress: ipAddress || 'Unknown IP',
+    resetUrl: finalResetUrl,
+  });
+
+  const text = [
+    `Hi ${greetingName},`,
+    '',
+    'Security Notification: All other active sessions for your Sig Signature account were recently revoked and signed out.',
+    '',
+    `Time: ${time || new Date().toUTCString()}`,
+    `Device: ${deviceInfo || 'Unknown device'}`,
+    `IP Address: ${ipAddress || 'Unknown IP'}`,
+    '',
+    `If this was not you, reset your password now: ${finalResetUrl}`,
+    '',
+    '© 2026 Sig Signature. All rights reserved.',
+  ].join('\n');
+
+  return sendEmail({
+    to,
+    subject: 'Security Notification: Other sessions were signed out',
+    html,
+    text,
+  });
+}
+
+/**
+ * Sends a final confirmation email after account deletion.
+ */
+async function sendAccountDeletedEmail({ to, firstName }) {
+  const greetingName = firstName || 'there';
+  const rawHtml = getTemplate('accountDeleted', 'account_deleted.html');
+  const html = renderTemplate(rawHtml, {
+    firstName: greetingName,
+  });
+
+  const text = [
+    `Hi ${greetingName},`,
+    '',
+    'Your Sig Signature account has been permanently deleted as requested, along with all associated signatures and data.',
+    '',
+    'Thank you for using Sig Signature.',
+    '',
+    '© 2026 Sig Signature. All rights reserved.',
+  ].join('\n');
+
+  return sendEmail({
+    to,
+    subject: 'Your Sig Signature account was deleted',
+    html,
+    text,
+  });
+}
+
 module.exports = {
   sendEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
   sendTeamInviteEmail,
+  sendPasswordChangedEmail,
+  sendSessionsRevokedEmail,
+  sendAccountDeletedEmail,
   escapeHtml,
   renderTemplate,
 };
