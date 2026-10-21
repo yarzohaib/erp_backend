@@ -15,6 +15,15 @@ const updateProfileSchema = z
     firstName: plainTextString({ max: 60, required: true }).optional(),
     lastName: plainTextString({ max: 60 }).nullable().optional(),
     companyName: plainTextString({ max: 100 }).nullable().optional(),
+    avatarUrl: z
+      .string({ error: "Avatar URL must be a string" })
+      .trim()
+      .refine(
+        (val) => val === "" || (val.startsWith("https://") && val.length <= 2048),
+        { error: "Avatar URL must be empty or an HTTPS URL" }
+      )
+      .nullable()
+      .optional(),
     email: z.any().optional(), // Ignored silently
   })
   .strip()
@@ -23,11 +32,12 @@ const updateProfileSchema = z
       return (
         body.firstName !== undefined ||
         body.lastName !== undefined ||
-        body.companyName !== undefined
+        body.companyName !== undefined ||
+        body.avatarUrl !== undefined
       );
     },
     {
-      error: "At least one field (firstName, lastName, or companyName) must be provided for update",
+      error: "At least one field (firstName, lastName, companyName, or avatarUrl) must be provided for update",
     }
   );
 

@@ -158,6 +158,7 @@ const oauthService = {
     const email = userinfo.email;
     const firstName = userinfo.given_name || email.split("@")[0] || "User";
     const lastName = userinfo.family_name || null;
+    const avatarUrl = userinfo.picture || null;
 
     return this.findOrCreateOAuthUser({
       provider: "google",
@@ -165,6 +166,7 @@ const oauthService = {
       email,
       firstName,
       lastName,
+      avatarUrl,
     });
   },
 
@@ -259,16 +261,19 @@ const oauthService = {
       lastName = null;
     }
 
+    const avatarUrl = profile.avatar_url || null;
+
     return this.findOrCreateOAuthUser({
       provider: "github",
       providerAccountId,
       email,
       firstName,
       lastName,
+      avatarUrl,
     });
   },
 
-  async findOrCreateOAuthUser({ provider, providerAccountId, email, firstName, lastName }) {
+  async findOrCreateOAuthUser({ provider, providerAccountId, email, firstName, lastName, avatarUrl = null }) {
     const normalizedEmail = email.trim().toLowerCase();
 
     // 1. Check if OAuthAccount exists for provider + providerAccountId
@@ -289,6 +294,13 @@ const oauthService = {
         await userRepository.markAsVerified(user.email);
         user.isVerified = true;
       }
+      if (!user.avatarUrl && avatarUrl) {
+        try {
+          user = await userRepository.updateProfile(user.id, { avatarUrl });
+        } catch (e) {
+          console.warn("Could not backfill OAuth avatar:", e);
+        }
+      }
     } else {
       // 2. Check if a user with the same lowercase email exists
       const existingUser = await userRepository.findFirst({ email: normalizedEmail });
@@ -301,6 +313,14 @@ const oauthService = {
           await sessionRepository.revokeAllByUserId(user.id);
           user.password = null;
           user.isVerified = true;
+        }
+
+        if (!user.avatarUrl && avatarUrl) {
+          try {
+            user = await userRepository.updateProfile(user.id, { avatarUrl });
+          } catch (e) {
+            console.warn("Could not backfill OAuth avatar:", e);
+          }
         }
 
         await oauthAccountRepository.create({
@@ -316,6 +336,7 @@ const oauthService = {
           password: null,
           firstName: firstName.trim(),
           lastName: lastName ? lastName.trim() : null,
+          avatarUrl: avatarUrl ? avatarUrl.trim() : null,
           isVerified: true,
           isActive: true,
         });

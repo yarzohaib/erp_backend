@@ -97,6 +97,7 @@ async function issueUserSession(user, { userAgent, ipAddress, deviceName } = {})
       firstName: user.firstName,
       lastName: user.lastName,
       companyName: user.companyName ?? null,
+      avatarUrl: user.avatarUrl ?? null,
     },
     tokens: {
       accessToken,
@@ -165,6 +166,7 @@ const authService = {
       firstName: user.firstName,
       lastName: user.lastName,
       companyName: user.companyName ?? null,
+      avatarUrl: user.avatarUrl ?? null,
     };
   },
 
@@ -183,6 +185,7 @@ const authService = {
       firstName: user.firstName,
       lastName: user.lastName,
       companyName: user.companyName ?? null,
+      avatarUrl: user.avatarUrl ?? null,
       isActive: user.isActive,
       isVerified: user.isVerified,
       createdAt: user.createdAt,

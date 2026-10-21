@@ -1010,6 +1010,13 @@
           },
           "User": {
             "fields": {
+              "avatarUrl": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "companyName": {
                 "nullable": true,
                 "type": {
@@ -1207,6 +1214,9 @@
             },
             "storage": {
               "fields": {
+                "avatarUrl": {
+                  "column": "avatarUrl"
+                },
                 "companyName": {
                   "column": "companyName"
                 },
@@ -2240,6 +2250,11 @@
             },
             "User": {
               "columns": {
+                "avatarUrl": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
                 "companyName": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
@@ -2445,7 +2460,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "6a3e7a98508a9a7c29c05b1001a6e973a39426dacf3e7680d996506560f6c6ef"
+    "storageHash": "72c39a12e3adbb0cb1366e1176624365df6d01ea342d18227c952a2b4b9229df"
   },
   "execution": {
     "executionHash": "883e2c80aab4489619a3a40c9f199046fe27141721f36df26650b07f360e4d35",

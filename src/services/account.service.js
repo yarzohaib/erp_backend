@@ -99,6 +99,7 @@ const accountService = {
         firstName: user.firstName,
         lastName: user.lastName,
         companyName: user.companyName ?? null,
+        avatarUrl: user.avatarUrl ?? null,
         isVerified: user.isVerified,
       },
       hasPassword,
@@ -112,7 +113,7 @@ const accountService = {
   },
 
   /**
-   * Update profile fields (firstName, lastName, companyName).
+   * Update profile fields (firstName, lastName, companyName, avatarUrl).
    * Strips unknown keys, ignores email silently.
    */
   async updateProfile(userId, updateData) {
@@ -131,6 +132,9 @@ const accountService = {
     if (updateData.companyName !== undefined) {
       payload.companyName = updateData.companyName ? updateData.companyName.trim() : null;
     }
+    if (updateData.avatarUrl !== undefined) {
+      payload.avatarUrl = updateData.avatarUrl ? updateData.avatarUrl.trim() : null;
+    }
 
     const updatedUser = await userRepository.updateProfile(userId, payload);
 
@@ -140,6 +144,7 @@ const accountService = {
       firstName: updatedUser.firstName,
       lastName: updatedUser.lastName,
       companyName: updatedUser.companyName ?? null,
+      avatarUrl: updatedUser.avatarUrl ?? null,
       isVerified: updatedUser.isVerified,
     };
   },
