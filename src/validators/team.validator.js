@@ -1,5 +1,9 @@
 const { z } = require("zod");
-const { signatureDataSchema, isValidS3Url } = require("./signature.validator");
+const {
+  signatureDataSchema,
+  updateSignatureDataSchema,
+  isValidS3Url,
+} = require("./signature.validator");
 const { plainTextString } = require("../utils/plainText");
 
 const createTeamSchema = z
@@ -16,7 +20,7 @@ const createTeamSchema = z
 const updateTeamSchema = z
   .object({
     name: plainTextString({ max: 100, required: true }).optional(),
-    data: signatureDataSchema.optional(),
+    data: updateSignatureDataSchema.optional(),
   })
   .strip()
   .refine(

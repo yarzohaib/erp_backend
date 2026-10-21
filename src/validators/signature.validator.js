@@ -94,6 +94,61 @@ const ALLOWED_FONT_FAMILIES = [
   "Commissioner",
 ];
 
+const ALLOWED_LAYOUTS = [
+  "two-column",
+  "horizontal",
+  "compact",
+  "single",
+  "corporate-card",
+];
+
+const ALLOWED_SOCIAL_ICONS_STYLES = [
+  "filled",
+  "outline",
+  "circle",
+  "minimal",
+];
+
+const ALLOWED_THEMES = ["corporate", "minimal", "modern", "dark"];
+const ALLOWED_SHAPES = ["rounded", "square", "pill"];
+const ALLOWED_BUTTON_STYLES = ["solid", "outline"];
+const ALLOWED_ALIGNS = ["left", "center", "right"];
+const ALLOWED_SIZES = ["sm", "md", "lg"];
+const ALLOWED_COLUMNS = ["left", "right", "full"];
+const ALLOWED_ORIENTATIONS = ["horizontal", "vertical"];
+
+/**
+ * Helper to validate enum fields with descriptive error messages
+ * that include the received value and the allowed options.
+ */
+function friendlyEnum(name, allowedValues, isOptional = false) {
+  return z
+    .any()
+    .superRefine((val, ctx) => {
+      if (val === undefined) {
+        if (!isOptional) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `${name} is required`,
+          });
+        }
+        return;
+      }
+      const checkVal = typeof val === "string" ? val.trim() : val;
+      if (!allowedValues.includes(checkVal)) {
+        const displayVal =
+          typeof val === "object" && val !== null
+            ? JSON.stringify(val)
+            : String(val);
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Invalid ${name} "${displayVal}". Allowed values: ${allowedValues.join(", ")}`,
+        });
+      }
+    })
+    .transform((val) => (typeof val === "string" ? val.trim() : val));
+}
+
 const socialsSchema = z
   .object({
     linkedin: z
@@ -133,6 +188,44 @@ const socialsSchema = z
   .strip()
   .default({});
 
+const updateSocialsSchema = z
+  .object({
+    linkedin: z
+      .string()
+      .trim()
+      .max(300, { error: "LinkedIn URL cannot exceed 300 characters" })
+      .refine(isValidSocialUrl, {
+        error: "LinkedIn URL must be empty or a valid HTTP/HTTPS URL",
+      })
+      .optional(),
+    twitter: z
+      .string()
+      .trim()
+      .max(300, { error: "Twitter URL cannot exceed 300 characters" })
+      .refine(isValidSocialUrl, {
+        error: "Twitter URL must be empty or a valid HTTP/HTTPS URL",
+      })
+      .optional(),
+    facebook: z
+      .string()
+      .trim()
+      .max(300, { error: "Facebook URL cannot exceed 300 characters" })
+      .refine(isValidSocialUrl, {
+        error: "Facebook URL must be empty or a valid HTTP/HTTPS URL",
+      })
+      .optional(),
+    instagram: z
+      .string()
+      .trim()
+      .max(300, { error: "Instagram URL cannot exceed 300 characters" })
+      .refine(isValidSocialUrl, {
+        error: "Instagram URL must be empty or a valid HTTP/HTTPS URL",
+      })
+      .optional(),
+  })
+  .strip()
+  .optional();
+
 const optionalSchema = z
   .object({
     address: plainTextString({ max: 250 }).optional().default(""),
@@ -142,22 +235,32 @@ const optionalSchema = z
   .strip()
   .default({});
 
+const updateOptionalSchema = z
+  .object({
+    address: plainTextString({ max: 250 }).optional(),
+    tagline: plainTextString({ max: 150 }).optional(),
+    disclaimer: plainTextString({ max: 1000 }).optional(),
+  })
+  .strip()
+  .optional();
+
 /**
  * Optional design configuration (Design Studio).
  * Rejects premium themes (luxury, glass, neon) and shapes (glass, blob).
  */
 const designSchema = z
   .object({
-    theme: z.enum(["corporate", "minimal", "modern", "dark"], {
-      error:
-        "Theme must be one of 'corporate', 'minimal', 'modern', or 'dark'",
-    }),
-    shape: z.enum(["rounded", "square", "pill"], {
-      error: "Shape must be one of 'rounded', 'square', or 'pill'",
-    }),
-    buttonStyle: z.enum(["solid", "outline"], {
-      error: "Button style must be one of 'solid' or 'outline'",
-    }),
+    theme: friendlyEnum("theme", ALLOWED_THEMES),
+    shape: friendlyEnum("shape", ALLOWED_SHAPES),
+    buttonStyle: friendlyEnum("buttonStyle", ALLOWED_BUTTON_STYLES),
+  })
+  .strip();
+
+const updateDesignSchema = z
+  .object({
+    theme: friendlyEnum("theme", ALLOWED_THEMES, true).optional(),
+    shape: friendlyEnum("shape", ALLOWED_SHAPES, true).optional(),
+    buttonStyle: friendlyEnum("buttonStyle", ALLOWED_BUTTON_STYLES, true).optional(),
   })
   .strip();
 
@@ -173,12 +276,8 @@ const extraTextSchema = z
       .min(1, { error: "Item ID cannot be empty" })
       .max(40, { error: "Item ID cannot exceed 40 characters" }),
     text: plainTextString({ max: 300, required: true }),
-    align: z.enum(["left", "center", "right"], {
-      error: "Align must be one of 'left', 'center', or 'right'",
-    }),
-    size: z.enum(["sm", "md", "lg"], {
-      error: "Size must be one of 'sm', 'md', or 'lg'",
-    }),
+    align: friendlyEnum("align", ALLOWED_ALIGNS),
+    size: friendlyEnum("size", ALLOWED_SIZES),
     bold: z.boolean({ error: "Bold must be a boolean" }),
     width: z
       .number({ error: "Width must be a number" })
@@ -186,7 +285,7 @@ const extraTextSchema = z
       .min(20, { error: "Width must be between 20 and 600" })
       .max(600, { error: "Width must be between 20 and 600" })
       .optional(),
-    column: z.enum(["left", "right", "full"]).optional(),
+    column: friendlyEnum("column", ALLOWED_COLUMNS, true).optional(),
   })
   .strip();
 
@@ -210,9 +309,7 @@ const extraImageSchema = z
       .int({ error: "Width must be an integer" })
       .min(20, { error: "Width must be between 20 and 600" })
       .max(600, { error: "Width must be between 20 and 600" }),
-    align: z.enum(["left", "center", "right"], {
-      error: "Align must be one of 'left', 'center', or 'right'",
-    }),
+    align: friendlyEnum("align", ALLOWED_ALIGNS),
     linkUrl: z
       .string()
       .trim()
@@ -221,7 +318,7 @@ const extraImageSchema = z
         error: "Link URL must be a valid HTTP or HTTPS URL",
       })
       .optional(),
-    column: z.enum(["left", "right", "full"]).optional(),
+    column: friendlyEnum("column", ALLOWED_COLUMNS, true).optional(),
   })
   .strip();
 
@@ -239,23 +336,15 @@ const extraDividerSchema = z
       .min(20, { error: "Width must be between 20 and 600" })
       .max(600, { error: "Width must be between 20 and 600" })
       .optional(),
-    align: z
-      .enum(["left", "center", "right"], {
-        error: "Align must be one of 'left', 'center', or 'right'",
-      })
-      .optional(),
+    align: friendlyEnum("align", ALLOWED_ALIGNS, true).optional(),
     thickness: z
       .number({ error: "Thickness must be a number" })
       .int({ error: "Thickness must be an integer" })
       .min(1, { error: "Thickness must be between 1 and 20" })
       .max(20, { error: "Thickness must be between 1 and 20" })
       .optional(),
-    orientation: z
-      .enum(["horizontal", "vertical"], {
-        error: "Orientation must be 'horizontal' or 'vertical'",
-      })
-      .optional(),
-    column: z.enum(["left", "right", "full"]).optional(),
+    orientation: friendlyEnum("orientation", ALLOWED_ORIENTATIONS, true).optional(),
+    column: friendlyEnum("column", ALLOWED_COLUMNS, true).optional(),
   })
   .strip();
 
@@ -286,16 +375,14 @@ const extraCtaSchema = z
         },
         { error: "URL must be a valid HTTP or HTTPS URL" }
       ),
-    align: z.enum(["left", "center", "right"], {
-      error: "Align must be one of 'left', 'center', or 'right'",
-    }),
+    align: friendlyEnum("align", ALLOWED_ALIGNS),
     width: z
       .number({ error: "Width must be a number" })
       .int({ error: "Width must be an integer" })
       .min(20, { error: "Width must be between 20 and 600" })
       .max(600, { error: "Width must be between 20 and 600" })
       .optional(),
-    column: z.enum(["left", "right", "full"]).optional(),
+    column: friendlyEnum("column", ALLOWED_COLUMNS, true).optional(),
   })
   .strip();
 
@@ -322,7 +409,7 @@ const extraBannerSchema = z
         error: "Link URL must be a valid HTTP or HTTPS URL",
       })
       .optional(),
-    column: z.enum(["left", "right", "full"]).optional(),
+    column: friendlyEnum("column", ALLOWED_COLUMNS, true).optional(),
   })
   .strip();
 
@@ -358,10 +445,10 @@ const freeTextSchema = z
     h: z.number(),
     locked: z.boolean().optional(),
     text: plainTextString({ max: 1000 }).default(""),
-    size: z.enum(["sm", "md", "lg"]).default("md"),
+    size: friendlyEnum("size", ALLOWED_SIZES, true).default("md"),
     bold: z.boolean().default(false),
-    align: z.enum(["left", "center", "right"]).default("left"),
-    bind: z.enum(["name", "jobTitle", "email", "phone"]).optional(),
+    align: friendlyEnum("align", ALLOWED_ALIGNS, true).default("left"),
+    bind: friendlyEnum("bind", ["name", "jobTitle", "email", "phone"], true).optional(),
   })
   .passthrough();
 
@@ -376,7 +463,7 @@ const freeImageSchema = z
     locked: z.boolean().optional(),
     url: z.string().max(2000).default(""),
     linkUrl: z.string().max(2000).optional(),
-    bind: z.enum(["photo"]).optional(),
+    bind: friendlyEnum("bind", ["photo"], true).optional(),
   })
   .passthrough();
 
@@ -417,7 +504,7 @@ const freeDividerSchema = z
     w: z.number(),
     h: z.number(),
     locked: z.boolean().optional(),
-    orientation: z.enum(["horizontal", "vertical"]).default("horizontal"),
+    orientation: friendlyEnum("orientation", ALLOWED_ORIENTATIONS, true).default("horizontal"),
     thickness: z.number().min(1).max(50).default(1),
   })
   .passthrough();
@@ -468,6 +555,17 @@ const canvasSchema = z
   .passthrough()
   .optional();
 
+const themeColorSchema = z
+  .string({ error: "Theme color must be a string" })
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/, {
+    error: "Theme color must be a valid hex color code matching #RRGGBB",
+  });
+
+/**
+ * Signature data schema with defaults for POST /api/v1/signatures.
+ * Missing styling fields default to brand and template defaults.
+ */
 const signatureDataSchema = z
   .object({
     fullName: plainTextString({ max: 100 }).default(""),
@@ -494,28 +592,58 @@ const signatureDataSchema = z
       })
       .optional()
       .default(""),
-    themeColor: z
-      .string({ error: "Theme color is required" })
-      .trim()
-      .regex(/^#[0-9a-fA-F]{6}$/, {
-        error: "Theme color must be a valid hex color code matching #RRGGBB",
-      }),
-    fontFamily: z.enum(ALLOWED_FONT_FAMILIES, {
-      error:
-        "Font family must be one of: Arial, Georgia, Verdana, Trebuchet MS, Tahoma, Inter, Roboto, DM Sans, Montserrat, Commissioner",
-    }),
-    layout: z.enum(["two-column", "horizontal", "compact", "single", "corporate-card"], {
-      error:
-        "Layout must be one of 'two-column', 'horizontal', 'compact', 'single', or 'corporate-card'",
-    }),
-    socialIconsStyle: z.enum(["filled", "outline", "circle", "minimal"], {
-      error:
-        "Social icons style must be one of 'filled', 'outline', 'circle', or 'minimal'",
-    }),
+    themeColor: themeColorSchema.default("#2563eb"),
+    fontFamily: friendlyEnum("fontFamily", ALLOWED_FONT_FAMILIES).default("Arial"),
+    layout: friendlyEnum("layout", ALLOWED_LAYOUTS).default("two-column"),
+    socialIconsStyle: friendlyEnum("socialIconsStyle", ALLOWED_SOCIAL_ICONS_STYLES).default("filled"),
     design: designSchema.optional(),
     extras: extrasSchema,
     socials: socialsSchema,
     optional: optionalSchema,
+    address: plainTextString({ max: 250 }).optional(),
+    tagline: plainTextString({ max: 150 }).optional(),
+    disclaimer: plainTextString({ max: 1000 }).optional(),
+    canvas: canvasSchema,
+    elements: freeElementsSchema,
+  })
+  .passthrough();
+
+/**
+ * Partial signature data schema for PATCH /api/v1/signatures/:id.
+ * Fields are optional and do NOT have defaults, preventing silent overwrite of existing values.
+ */
+const updateSignatureDataSchema = z
+  .object({
+    fullName: plainTextString({ max: 100 }).optional(),
+    jobTitle: plainTextString({ max: 100 }).optional(),
+    companyName: plainTextString({ max: 100 }).optional(),
+    email: plainTextString({ max: 254 }).optional(),
+    phone: plainTextString({ max: 40 }).optional(),
+    website: plainTextString({ max: 200 }).optional(),
+    avatarUrl: z
+      .string()
+      .trim()
+      .refine((val) => val === "" || isValidImageUrl(val), {
+        error:
+          "Avatar URL must be empty, a relative path starting with '/', or an HTTPS URL hosted on authorized storage",
+      })
+      .optional(),
+    companyLogoUrl: z
+      .string()
+      .trim()
+      .refine((val) => val === "" || isValidImageUrl(val), {
+        error:
+          "Company logo URL must be empty, a relative path starting with '/', or an HTTPS URL hosted on authorized storage",
+      })
+      .optional(),
+    themeColor: themeColorSchema.optional(),
+    fontFamily: friendlyEnum("fontFamily", ALLOWED_FONT_FAMILIES, true).optional(),
+    layout: friendlyEnum("layout", ALLOWED_LAYOUTS, true).optional(),
+    socialIconsStyle: friendlyEnum("socialIconsStyle", ALLOWED_SOCIAL_ICONS_STYLES, true).optional(),
+    design: updateDesignSchema.optional(),
+    extras: extrasSchema,
+    socials: updateSocialsSchema,
+    optional: updateOptionalSchema,
     address: plainTextString({ max: 250 }).optional(),
     tagline: plainTextString({ max: 150 }).optional(),
     disclaimer: plainTextString({ max: 1000 }).optional(),
@@ -542,7 +670,10 @@ const createSignatureSchema = z
       .min(1, { error: "Template version must be between 1 and 1000" })
       .max(1000, { error: "Template version must be between 1 and 1000" })
       .default(1),
-    data: signatureDataSchema,
+    data: z.preprocess(
+      (val) => (val === undefined ? {} : val),
+      signatureDataSchema
+    ),
   })
   .strip()
   .refine(
@@ -572,7 +703,7 @@ const updateSignatureSchema = z
       .min(1, { error: "Template version must be between 1 and 1000" })
       .max(1000, { error: "Template version must be between 1 and 1000" })
       .optional(),
-    data: signatureDataSchema.optional(),
+    data: updateSignatureDataSchema.optional(),
   })
   .strip()
   .refine(
@@ -615,7 +746,10 @@ module.exports = {
   updateSignatureSchema,
   signatureIdParamSchema,
   signatureDataSchema,
+  updateSignatureDataSchema,
   isValidImageUrl,
   isValidS3Url,
   ALLOWED_FONT_FAMILIES,
+  ALLOWED_LAYOUTS,
+  ALLOWED_SOCIAL_ICONS_STYLES,
 };

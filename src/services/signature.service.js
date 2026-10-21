@@ -60,7 +60,39 @@ const signatureService = {
       throw new NotFoundError("Signature not found", "SIGNATURE_NOT_FOUND");
     }
 
-    const updated = await signatureRepository.update(id, userId, updateData);
+    const payload = { ...updateData };
+    if (updateData.data && typeof updateData.data === "object") {
+      const existingData =
+        typeof existing.data === "object" && existing.data !== null
+          ? existing.data
+          : {};
+      payload.data = {
+        ...existingData,
+        ...updateData.data,
+      };
+      if (
+        updateData.data.socials &&
+        typeof updateData.data.socials === "object" &&
+        existingData.socials
+      ) {
+        payload.data.socials = {
+          ...existingData.socials,
+          ...updateData.data.socials,
+        };
+      }
+      if (
+        updateData.data.optional &&
+        typeof updateData.data.optional === "object" &&
+        existingData.optional
+      ) {
+        payload.data.optional = {
+          ...existingData.optional,
+          ...updateData.data.optional,
+        };
+      }
+    }
+
+    const updated = await signatureRepository.update(id, userId, payload);
     if (!updated || !updated.id) {
       const refreshed = await signatureRepository.findByIdForUser(id, userId);
       return sanitizeSignature(refreshed);
