@@ -12,7 +12,24 @@ const errorHandler = require("./middleware/errorHandler.middleware");
 
 const app = express();
 
-app.set("trust proxy", 1);
+const trustProxyHops = parseInt(process.env.TRUST_PROXY_HOPS || "1", 10);
+app.set("trust proxy", trustProxyHops);
+
+// In non-production: Log trust proxy setting and log client IP diagnostics once on the first incoming request
+if (process.env.NODE_ENV !== "production") {
+  console.log(`[Proxy Config] trust proxy hops: ${trustProxyHops}`);
+  let ipDiagnosticsLogged = false;
+  app.use((req, res, next) => {
+    if (!ipDiagnosticsLogged) {
+      ipDiagnosticsLogged = true;
+      const xForwardedFor = req.headers["x-forwarded-for"] || "none";
+      console.log(
+        `[Client IP Diagnostics] req.ip: "${req.ip}", X-Forwarded-For: "${xForwardedFor}", trust proxy: ${app.get("trust proxy")}`
+      );
+    }
+    next();
+  });
+}
 
 app.use(helmet());
 app.use(

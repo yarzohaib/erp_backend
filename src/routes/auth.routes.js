@@ -41,7 +41,7 @@ router.post(
 
 // Account creation & authentication
 router.post("/signup", signupLimiter, validate(signupSchema), authController.signup);
-router.post("/login", loginLimiter, validate(loginSchema), authController.login);
+router.post("/login", validate(loginSchema), loginLimiter, authController.login);
 router.post("/refresh", authController.refresh);
 router.post("/logout", authController.logout);
 
@@ -55,8 +55,8 @@ router.delete("/sessions/:id", authenticate, authController.revokeSession);
 // Password recovery & email verification with abuse/cost protection
 router.post(
   "/forgot-password",
-  forgotPasswordLimiter,
   validate(forgotPasswordSchema),
+  forgotPasswordLimiter,
   authController.forgotPassword
 );
 
@@ -68,8 +68,8 @@ router.post(
 
 router.post(
   "/request-verification",
-  resendVerificationLimiter,
   validate(requestVerificationSchema),
+  resendVerificationLimiter,
   authController.requestVerification
 );
 

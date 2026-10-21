@@ -46,12 +46,13 @@ function escapeHtml(str) {
 
 /**
  * Replaces {{placeholder}} tokens in email templates
- * Escapes values whose keys are listed in escapeKeys (defaulting to user-input fields)
+ * Confirms every user supplied value that enters an HTML email goes through escapeHtml.
+ * Escapes all variables by default unless explicitly excluded.
  */
-function renderTemplate(templateContent, variables = {}, escapeKeys = ['firstName', 'memberName', 'ownerName', 'teamName', 'time', 'deviceInfo', 'ipAddress']) {
+function renderTemplate(templateContent, variables = {}, escapeKeys = null) {
   let output = templateContent;
   for (const [key, value] of Object.entries(variables)) {
-    const shouldEscape = Array.isArray(escapeKeys) ? escapeKeys.includes(key) : key === 'firstName';
+    const shouldEscape = Array.isArray(escapeKeys) ? escapeKeys.includes(key) : true;
     const formattedValue = shouldEscape ? escapeHtml(value) : String(value ?? '');
     const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
     output = output.replace(placeholder, formattedValue);
@@ -208,8 +209,7 @@ async function sendTeamInviteEmail({ to, memberName, ownerName, teamName, action
       teamName: displayTeamName,
       actionUrl,
       expiresIn,
-    },
-    ['memberName', 'ownerName', 'teamName']
+    }
   );
 
   const text = [

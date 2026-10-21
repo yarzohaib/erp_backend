@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "test": "node --test tests/**/*.test.js",
     "postinstall": "prisma skills sync || exit 0",
-    "db:delete-user": "node scripts/delete-user.js"
+    "db:delete-user": "node scripts/delete-user.js",
+    "db:clean-signatures": "node scripts/clean-signatures.js"
   },
   "keywords": [],
   "author": "",

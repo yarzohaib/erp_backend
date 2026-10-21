@@ -1,4 +1,5 @@
 const { z } = require("zod");
+const { plainTextString } = require("../utils/plainText");
 
 /**
  * Strict password rule:
@@ -43,15 +44,12 @@ const emailSchema = z
   .email("Please provide a valid email address");
 
 const signupSchema = z.object({
-  firstName: z
-    .string({ error: "First name is required" })
-    .trim()
-    .min(1, "First name is required")
-    .max(100, "First name cannot exceed 100 characters"),
-  lastName: z
-    .string()
-    .trim()
-    .max(100, "Last name cannot exceed 100 characters")
+  firstName: plainTextString({
+    max: 100,
+    required: true,
+    error: "First name is required",
+  }),
+  lastName: plainTextString({ max: 100 })
     .optional()
     .nullable()
     .or(z.literal("")),

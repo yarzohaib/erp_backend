@@ -1,4 +1,5 @@
 const { z } = require("zod");
+const { plainTextString } = require("../utils/plainText");
 
 /**
  * Validates that an image URL is either:
@@ -134,24 +135,9 @@ const socialsSchema = z
 
 const optionalSchema = z
   .object({
-    address: z
-      .string()
-      .trim()
-      .max(250, { error: "Address cannot exceed 250 characters" })
-      .optional()
-      .default(""),
-    tagline: z
-      .string()
-      .trim()
-      .max(150, { error: "Tagline cannot exceed 150 characters" })
-      .optional()
-      .default(""),
-    disclaimer: z
-      .string()
-      .trim()
-      .max(1000, { error: "Disclaimer cannot exceed 1000 characters" })
-      .optional()
-      .default(""),
+    address: plainTextString({ max: 250 }).optional().default(""),
+    tagline: plainTextString({ max: 150 }).optional().default(""),
+    disclaimer: plainTextString({ max: 1000 }).optional().default(""),
   })
   .strip()
   .default({});
@@ -186,10 +172,7 @@ const extraTextSchema = z
       .trim()
       .min(1, { error: "Item ID cannot be empty" })
       .max(40, { error: "Item ID cannot exceed 40 characters" }),
-    text: z
-      .string({ error: "Text is required" })
-      .trim()
-      .max(300, { error: "Text cannot exceed 300 characters" }),
+    text: plainTextString({ max: 300, required: true }),
     align: z.enum(["left", "center", "right"], {
       error: "Align must be one of 'left', 'center', or 'right'",
     }),
@@ -284,11 +267,7 @@ const extraCtaSchema = z
       .trim()
       .min(1, { error: "Item ID cannot be empty" })
       .max(40, { error: "Item ID cannot exceed 40 characters" }),
-    label: z
-      .string({ error: "Label is required" })
-      .trim()
-      .min(1, { error: "Label cannot be empty" })
-      .max(40, { error: "Label cannot exceed 40 characters" }),
+    label: plainTextString({ max: 40, required: true }),
     url: z
       .string({ error: "URL is required" })
       .trim()
@@ -378,7 +357,7 @@ const freeTextSchema = z
     w: z.number(),
     h: z.number(),
     locked: z.boolean().optional(),
-    text: z.string().max(1000).default(""),
+    text: plainTextString({ max: 1000 }).default(""),
     size: z.enum(["sm", "md", "lg"]).default("md"),
     bold: z.boolean().default(false),
     align: z.enum(["left", "center", "right"]).default("left"),
@@ -452,7 +431,7 @@ const freeCtaSchema = z
     w: z.number(),
     h: z.number(),
     locked: z.boolean().optional(),
-    label: z.string().max(200).default("Button"),
+    label: plainTextString({ max: 200 }).default("Button"),
     url: z.string().max(2000).default("#"),
   })
   .passthrough();
@@ -491,36 +470,12 @@ const canvasSchema = z
 
 const signatureDataSchema = z
   .object({
-    fullName: z
-      .string()
-      .trim()
-      .max(100, { error: "Full name cannot exceed 100 characters" })
-      .default(""),
-    jobTitle: z
-      .string()
-      .trim()
-      .max(100, { error: "Job title cannot exceed 100 characters" })
-      .default(""),
-    companyName: z
-      .string()
-      .trim()
-      .max(100, { error: "Company name cannot exceed 100 characters" })
-      .default(""),
-    email: z
-      .string()
-      .trim()
-      .max(254, { error: "Email cannot exceed 254 characters" })
-      .default(""),
-    phone: z
-      .string()
-      .trim()
-      .max(40, { error: "Phone cannot exceed 40 characters" })
-      .default(""),
-    website: z
-      .string()
-      .trim()
-      .max(200, { error: "Website cannot exceed 200 characters" })
-      .default(""),
+    fullName: plainTextString({ max: 100 }).default(""),
+    jobTitle: plainTextString({ max: 100 }).default(""),
+    companyName: plainTextString({ max: 100 }).default(""),
+    email: plainTextString({ max: 254 }).default(""),
+    phone: plainTextString({ max: 40 }).default(""),
+    website: plainTextString({ max: 200 }).default(""),
     avatarUrl: z
       .string()
       .trim()
@@ -561,21 +516,9 @@ const signatureDataSchema = z
     extras: extrasSchema,
     socials: socialsSchema,
     optional: optionalSchema,
-    address: z
-      .string()
-      .trim()
-      .max(250, { error: "Address cannot exceed 250 characters" })
-      .optional(),
-    tagline: z
-      .string()
-      .trim()
-      .max(150, { error: "Tagline cannot exceed 150 characters" })
-      .optional(),
-    disclaimer: z
-      .string()
-      .trim()
-      .max(1000, { error: "Disclaimer cannot exceed 1000 characters" })
-      .optional(),
+    address: plainTextString({ max: 250 }).optional(),
+    tagline: plainTextString({ max: 150 }).optional(),
+    disclaimer: plainTextString({ max: 1000 }).optional(),
     canvas: canvasSchema,
     elements: freeElementsSchema,
   })
@@ -583,11 +526,7 @@ const signatureDataSchema = z
 
 const createSignatureSchema = z
   .object({
-    name: z
-      .string({ error: "Name is required" })
-      .trim()
-      .min(1, { error: "Name cannot be empty" })
-      .max(100, { error: "Name cannot exceed 100 characters" }),
+    name: plainTextString({ max: 100, required: true }),
     templateId: z
       .string({ error: "Template ID is required" })
       .trim()
@@ -616,12 +555,7 @@ const createSignatureSchema = z
 
 const updateSignatureSchema = z
   .object({
-    name: z
-      .string({ error: "Name must be a string" })
-      .trim()
-      .min(1, { error: "Name cannot be empty" })
-      .max(100, { error: "Name cannot exceed 100 characters" })
-      .optional(),
+    name: plainTextString({ max: 100, required: true }).optional(),
     templateId: z
       .string({ error: "Template ID must be a string" })
       .trim()

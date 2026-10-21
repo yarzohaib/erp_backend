@@ -1,33 +1,20 @@
 const { z } = require("zod");
+const { plainTextString } = require("../utils/plainText");
+const { ALLOWED_FONT_FAMILIES } = require("./signature.validator");
 
 /**
  * Validator for updating user profile.
- * - firstName: 1 to 60, trimmed, required if sent
- * - lastName: 0 to 60, nullable
- * - companyName: 0 to 100, nullable
+ * - firstName: 1 to 60, trimmed, required if sent, plain text only
+ * - lastName: 0 to 60, nullable, plain text only
+ * - companyName: 0 to 100, nullable, plain text only
  * - email: ignored silently if sent
  * - strips unknown keys
  */
 const updateProfileSchema = z
   .object({
-    firstName: z
-      .string({ error: "First name must be a string" })
-      .trim()
-      .min(1, { error: "First name cannot be empty" })
-      .max(60, { error: "First name cannot exceed 60 characters" })
-      .optional(),
-    lastName: z
-      .string({ error: "Last name must be a string" })
-      .trim()
-      .max(60, { error: "Last name cannot exceed 60 characters" })
-      .nullable()
-      .optional(),
-    companyName: z
-      .string({ error: "Company name must be a string" })
-      .trim()
-      .max(100, { error: "Company name cannot exceed 100 characters" })
-      .nullable()
-      .optional(),
+    firstName: plainTextString({ max: 60, required: true }).optional(),
+    lastName: plainTextString({ max: 60 }).nullable().optional(),
+    companyName: plainTextString({ max: 100 }).nullable().optional(),
     email: z.any().optional(), // Ignored silently
   })
   .strip()
@@ -48,8 +35,8 @@ const updateProfileSchema = z
  * Validator for updating account settings.
  * - defaultTemplateId: null or slug string max 64, safe characters only
  * - defaultExportFormat: "html" or "plain"
- * - signatureFont: string max 40, letters digits spaces only
- * - brandColor: hex like #245FD4
+ * - signatureFont: strictly from ALLOWED_FONT_FAMILIES enum (no quotes, semicolons, or free text)
+ * - brandColor: strict 6-digit hex code (^#[0-9a-fA-F]{6}$)
  * - includePhoto: boolean
  * - notifyProductUpdates: boolean
  * - notifyTips: boolean
@@ -72,19 +59,15 @@ const updateSettingsSchema = z
       })
       .optional(),
     signatureFont: z
-      .string({ error: "Signature font must be a string" })
-      .trim()
-      .min(1, { error: "Signature font cannot be empty" })
-      .max(40, { error: "Signature font cannot exceed 40 characters" })
-      .regex(/^[a-zA-Z0-9 ]+$/, {
-        error: "Signature font may only contain letters, numbers, and spaces",
+      .enum(ALLOWED_FONT_FAMILIES, {
+        error: `Signature font must be one of: ${ALLOWED_FONT_FAMILIES.join(", ")}`,
       })
       .optional(),
     brandColor: z
       .string({ error: "Brand color must be a string" })
       .trim()
-      .regex(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, {
-        error: "Brand color must be a valid hex color code (e.g. #245FD4)",
+      .regex(/^#[0-9a-fA-F]{6}$/, {
+        error: "Brand color must be a valid 6-digit hex color code (#RRGGBB)",
       })
       .optional(),
     includePhoto: z

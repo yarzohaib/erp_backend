@@ -1,24 +1,28 @@
 const signatureRepository = require("../repositories/signature.repository");
 const { NotFoundError, ForbiddenError } = require("../utils/errors");
+const { sanitizeSignature } = require("../utils/plainText");
 
 const signatureService = {
   /**
    * List all signatures for the authenticated user.
+   * Sanitizes text fields on read to neutralize any legacy/unvalidated stored HTML tags.
    */
   async list(userId) {
-    return signatureRepository.listByUser(userId);
+    const signatures = await signatureRepository.listByUser(userId);
+    return Array.isArray(signatures) ? signatures.map(sanitizeSignature) : signatures;
   },
 
   /**
    * Get a single signature by id for the authenticated user.
    * Throws 404 if signature does not exist or belongs to another user.
+   * Sanitizes text fields on read to neutralize any legacy/unvalidated stored HTML tags.
    */
   async get(id, userId) {
     const signature = await signatureRepository.findByIdForUser(id, userId);
     if (!signature) {
       throw new NotFoundError("Signature not found", "SIGNATURE_NOT_FOUND");
     }
-    return signature;
+    return sanitizeSignature(signature);
   },
 
   /**
@@ -36,13 +40,14 @@ const signatureService = {
       );
     }
 
-    return signatureRepository.create({
+    const created = await signatureRepository.create({
       userId,
       name,
       templateId,
       templateVersion,
       data,
     });
+    return sanitizeSignature(created);
   },
 
   /**
@@ -57,9 +62,10 @@ const signatureService = {
 
     const updated = await signatureRepository.update(id, userId, updateData);
     if (!updated || !updated.id) {
-      return signatureRepository.findByIdForUser(id, userId);
+      const refreshed = await signatureRepository.findByIdForUser(id, userId);
+      return sanitizeSignature(refreshed);
     }
-    return updated;
+    return sanitizeSignature(updated);
   },
 
   /**
@@ -98,13 +104,14 @@ const signatureService = {
 
     const duplicateName = `${original.name} (Copy)`.slice(0, 100);
 
-    return signatureRepository.create({
+    const duplicated = await signatureRepository.create({
       userId,
       name: duplicateName,
       templateId: original.templateId,
       templateVersion: original.templateVersion,
       data: original.data,
     });
+    return sanitizeSignature(duplicated);
   },
 };
 

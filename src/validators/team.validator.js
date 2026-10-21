@@ -1,5 +1,6 @@
 const { z } = require("zod");
 const { signatureDataSchema, isValidS3Url } = require("./signature.validator");
+const { plainTextString } = require("../utils/plainText");
 
 const createTeamSchema = z
   .object({
@@ -8,23 +9,13 @@ const createTeamSchema = z
       .trim()
       .min(1, { error: "Signature ID cannot be empty" })
       .max(64, { error: "Signature ID cannot exceed 64 characters" }),
-    name: z
-      .string({ error: "Name must be a string" })
-      .trim()
-      .min(1, { error: "Name cannot be empty" })
-      .max(100, { error: "Name cannot exceed 100 characters" })
-      .optional(),
+    name: plainTextString({ max: 100, required: true }).optional(),
   })
   .strip();
 
 const updateTeamSchema = z
   .object({
-    name: z
-      .string({ error: "Name must be a string" })
-      .trim()
-      .min(1, { error: "Name cannot be empty" })
-      .max(100, { error: "Name cannot exceed 100 characters" })
-      .optional(),
+    name: plainTextString({ max: 100, required: true }).optional(),
     data: signatureDataSchema.optional(),
   })
   .strip()
@@ -94,29 +85,15 @@ const memberSocialsSchema = z
 
 const memberSchema = z
   .object({
-    name: z
-      .string({ error: "Name is required" })
-      .trim()
-      .min(1, { error: "Name cannot be empty" })
-      .max(100, { error: "Name cannot exceed 100 characters" }),
+    name: plainTextString({ max: 100, required: true }),
     email: z
       .string({ error: "Email is required" })
       .trim()
       .toLowerCase()
       .max(254, { error: "Email cannot exceed 254 characters" })
       .email({ error: "Must be a valid email address" }),
-    jobTitle: z
-      .string({ error: "Job title must be a string" })
-      .trim()
-      .max(100, { error: "Job title cannot exceed 100 characters" })
-      .optional()
-      .default(""),
-    phone: z
-      .string({ error: "Phone must be a string" })
-      .trim()
-      .max(40, { error: "Phone cannot exceed 40 characters" })
-      .optional()
-      .default(""),
+    jobTitle: plainTextString({ max: 100 }).optional().default(""),
+    phone: plainTextString({ max: 40 }).optional().default(""),
     photoUrl: z
       .string({ error: "Photo URL must be a string" })
       .trim()
@@ -132,12 +109,7 @@ const memberSchema = z
 
 const updateMemberSchema = z
   .object({
-    name: z
-      .string({ error: "Name must be a string" })
-      .trim()
-      .min(1, { error: "Name cannot be empty" })
-      .max(100, { error: "Name cannot exceed 100 characters" })
-      .optional(),
+    name: plainTextString({ max: 100, required: true }).optional(),
     email: z
       .string({ error: "Email must be a string" })
       .trim()
@@ -145,16 +117,8 @@ const updateMemberSchema = z
       .max(254, { error: "Email cannot exceed 254 characters" })
       .email({ error: "Must be a valid email address" })
       .optional(),
-    jobTitle: z
-      .string({ error: "Job title must be a string" })
-      .trim()
-      .max(100, { error: "Job title cannot exceed 100 characters" })
-      .optional(),
-    phone: z
-      .string({ error: "Phone must be a string" })
-      .trim()
-      .max(40, { error: "Phone cannot exceed 40 characters" })
-      .optional(),
+    jobTitle: plainTextString({ max: 100 }).optional(),
+    phone: plainTextString({ max: 40 }).optional(),
     photoUrl: z
       .string({ error: "Photo URL must be a string" })
       .trim()
