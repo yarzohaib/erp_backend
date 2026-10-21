@@ -5,12 +5,62 @@ const oauthAccountRepository = require("../repositories/oauth-account.repository
 const oauthLoginCodeRepository = require("../repositories/oauth-login-code.repository");
 const authService = require("./auth.service");
 
-function getBackendUrl() {
-  return (process.env.BACKEND_URL || process.env.APP_URL || "http://localhost:8000").replace(/\/$/, "");
+function getBackendUrl(req) {
+  // 1. Explicit environment variable
+  const envBackend = (process.env.BACKEND_URL || "").trim().replace(/\/+$/, "");
+  if (envBackend) {
+    if (process.env.NODE_ENV === "production" && (envBackend.includes("localhost") || envBackend.includes("127.0.0.1"))) {
+      // In production, ignore misconfigured localhost BACKEND_URL
+    } else {
+      return envBackend;
+    }
+  }
+
+  // 2. Derive dynamically from request if available
+  if (req) {
+    const protoHeader = req.headers["x-forwarded-proto"];
+    const proto = (protoHeader ? String(protoHeader).split(",")[0].trim() : req.protocol) || "https";
+    const hostHeader = req.headers["x-forwarded-host"] || req.get("host");
+    const host = hostHeader ? String(hostHeader).split(",")[0].trim() : "";
+    if (host) {
+      if (process.env.NODE_ENV === "production" && (host.includes("localhost") || host.includes("127.0.0.1"))) {
+        // Fall through
+      } else {
+        return `${proto}://${host}`;
+      }
+    }
+  }
+
+  // 3. Fallbacks
+  if (process.env.NODE_ENV === "production") {
+    return "https://api.sigsignature.com";
+  }
+
+  const appUrl = (process.env.APP_URL || "").trim().replace(/\/+$/, "");
+  if (appUrl) {
+    return appUrl.startsWith("http") ? appUrl : `http://${appUrl}`;
+  }
+
+  return "http://localhost:8000";
 }
 
-function getFrontendUrl() {
-  return (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+function getFrontendUrl(req) {
+  // 1. Explicit environment variable
+  const envFrontend = (process.env.FRONTEND_URL || "").trim().replace(/\/+$/, "");
+  if (envFrontend) {
+    if (process.env.NODE_ENV === "production" && (envFrontend.includes("localhost") || envFrontend.includes("127.0.0.1"))) {
+      // Fall through to production default
+    } else {
+      return envFrontend;
+    }
+  }
+
+  // 2. Production default
+  if (process.env.NODE_ENV === "production") {
+    return "https://www.sigsignature.com";
+  }
+
+  return "http://localhost:3000";
 }
 
 function safeCompareState(a, b) {
@@ -26,8 +76,8 @@ function safeCompareState(a, b) {
 }
 
 const oauthService = {
-  getGoogleAuthUrl(state) {
-    const redirectUri = `${getBackendUrl()}/api/v1/auth/google/callback`;
+  getGoogleAuthUrl(state, req) {
+    const redirectUri = `${getBackendUrl(req)}/api/v1/auth/google/callback`;
     const params = new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID || "",
       redirect_uri: redirectUri,
@@ -40,8 +90,8 @@ const oauthService = {
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   },
 
-  getGithubAuthUrl(state) {
-    const redirectUri = `${getBackendUrl()}/api/v1/auth/github/callback`;
+  getGithubAuthUrl(state, req) {
+    const redirectUri = `${getBackendUrl(req)}/api/v1/auth/github/callback`;
     const params = new URLSearchParams({
       client_id: process.env.GITHUB_CLIENT_ID || "",
       redirect_uri: redirectUri,
@@ -52,8 +102,8 @@ const oauthService = {
     return `https://github.com/login/oauth/authorize?${params.toString()}`;
   },
 
-  async handleGoogleCallback(code) {
-    const redirectUri = `${getBackendUrl()}/api/v1/auth/google/callback`;
+  async handleGoogleCallback(code, req) {
+    const redirectUri = `${getBackendUrl(req)}/api/v1/auth/google/callback`;
     const tokenBody = new URLSearchParams({
       code,
       client_id: process.env.GOOGLE_CLIENT_ID || "",
@@ -118,8 +168,8 @@ const oauthService = {
     });
   },
 
-  async handleGithubCallback(code) {
-    const redirectUri = `${getBackendUrl()}/api/v1/auth/github/callback`;
+  async handleGithubCallback(code, req) {
+    const redirectUri = `${getBackendUrl(req)}/api/v1/auth/github/callback`;
     const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
       method: "POST",
       headers: {
@@ -327,6 +377,7 @@ const oauthService = {
   },
 
   safeCompareState,
+  getBackendUrl,
   getFrontendUrl,
 };
 

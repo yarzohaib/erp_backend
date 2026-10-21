@@ -4,46 +4,92 @@ const { setAuthCookies } = require("../utils/cookies");
 const { UnauthorizedError } = require("../utils/errors");
 
 const OAUTH_COOKIE_NAME = "oauth_state";
+const OAUTH_ORIGIN_COOKIE_NAME = "oauth_frontend_origin";
 
-const cookieBaseOptions = {
-  httpOnly: true,
-  sameSite: "lax",
-  secure: process.env.NODE_ENV === "production",
-  path: "/api/v1/auth",
-};
+function getCookieBaseOptions(req) {
+  const isHttps =
+    process.env.NODE_ENV === "production" ||
+    Boolean(req?.secure) ||
+    req?.protocol === "https" ||
+    req?.headers?.["x-forwarded-proto"] === "https";
+
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: Boolean(isHttps),
+    path: "/api/v1/auth",
+  };
+}
+
+function sanitizeFrontendOrigin(originCandidate) {
+  if (!originCandidate || typeof originCandidate !== "string") {
+    return null;
+  }
+  try {
+    const parsed = new URL(originCandidate);
+    const host = parsed.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1") {
+      return parsed.origin;
+    }
+    if (
+      host === "sigsignature.com" ||
+      host === "www.sigsignature.com" ||
+      host.endsWith(".sigsignature.com") ||
+      host.endsWith(".vercel.app")
+    ) {
+      return parsed.origin;
+    }
+  } catch (_) {}
+  return null;
+}
 
 const oauthController = {
   googleAuth(req, res) {
     const state = crypto.randomBytes(32).toString("hex");
-
-    res.cookie(OAUTH_COOKIE_NAME, state, {
-      ...cookieBaseOptions,
+    const cookieOptions = {
+      ...getCookieBaseOptions(req),
       maxAge: 10 * 60 * 1000, // 10 minutes
-    });
+    };
 
-    const targetUrl = oauthService.getGoogleAuthUrl(state);
+    res.cookie(OAUTH_COOKIE_NAME, state, cookieOptions);
+
+    const frontendOrigin = sanitizeFrontendOrigin(req.query.frontend_url);
+    if (frontendOrigin) {
+      res.cookie(OAUTH_ORIGIN_COOKIE_NAME, frontendOrigin, cookieOptions);
+    }
+
+    const targetUrl = oauthService.getGoogleAuthUrl(state, req);
     return res.redirect(302, targetUrl);
   },
 
   githubAuth(req, res) {
     const state = crypto.randomBytes(32).toString("hex");
-
-    res.cookie(OAUTH_COOKIE_NAME, state, {
-      ...cookieBaseOptions,
+    const cookieOptions = {
+      ...getCookieBaseOptions(req),
       maxAge: 10 * 60 * 1000, // 10 minutes
-    });
+    };
 
-    const targetUrl = oauthService.getGithubAuthUrl(state);
+    res.cookie(OAUTH_COOKIE_NAME, state, cookieOptions);
+
+    const frontendOrigin = sanitizeFrontendOrigin(req.query.frontend_url);
+    if (frontendOrigin) {
+      res.cookie(OAUTH_ORIGIN_COOKIE_NAME, frontendOrigin, cookieOptions);
+    }
+
+    const targetUrl = oauthService.getGithubAuthUrl(state, req);
     return res.redirect(302, targetUrl);
   },
 
   async googleCallback(req, res) {
-    const frontendBase = oauthService.getFrontendUrl();
+    const cookieOptions = getCookieBaseOptions(req);
+    const savedFrontendOrigin = req.cookies ? req.cookies[OAUTH_ORIGIN_COOKIE_NAME] : undefined;
+    const frontendBase = sanitizeFrontendOrigin(savedFrontendOrigin) || oauthService.getFrontendUrl(req);
     const { code, state, error } = req.query;
     const savedState = req.cookies ? req.cookies[OAUTH_COOKIE_NAME] : undefined;
 
-    // Always clear the state cookie
-    res.clearCookie(OAUTH_COOKIE_NAME, cookieBaseOptions);
+    // Always clear the state and origin cookies
+    res.clearCookie(OAUTH_COOKIE_NAME, cookieOptions);
+    res.clearCookie(OAUTH_ORIGIN_COOKIE_NAME, cookieOptions);
 
     if (error) {
       console.error("Google returned OAuth error query:", error);
@@ -62,7 +108,7 @@ const oauthController = {
     }
 
     try {
-      const user = await oauthService.handleGoogleCallback(code);
+      const user = await oauthService.handleGoogleCallback(code, req);
       const loginCode = await oauthService.createLoginCodeForUser(user.id);
 
       return res.redirect(302, `${frontendBase}/auth/callback?code=${loginCode}`);
@@ -82,12 +128,15 @@ const oauthController = {
   },
 
   async githubCallback(req, res) {
-    const frontendBase = oauthService.getFrontendUrl();
+    const cookieOptions = getCookieBaseOptions(req);
+    const savedFrontendOrigin = req.cookies ? req.cookies[OAUTH_ORIGIN_COOKIE_NAME] : undefined;
+    const frontendBase = sanitizeFrontendOrigin(savedFrontendOrigin) || oauthService.getFrontendUrl(req);
     const { code, state, error } = req.query;
     const savedState = req.cookies ? req.cookies[OAUTH_COOKIE_NAME] : undefined;
 
-    // Always clear the state cookie
-    res.clearCookie(OAUTH_COOKIE_NAME, cookieBaseOptions);
+    // Always clear the state and origin cookies
+    res.clearCookie(OAUTH_COOKIE_NAME, cookieOptions);
+    res.clearCookie(OAUTH_ORIGIN_COOKIE_NAME, cookieOptions);
 
     if (error) {
       console.error("GitHub returned OAuth error query:", error);
@@ -106,7 +155,7 @@ const oauthController = {
     }
 
     try {
-      const user = await oauthService.handleGithubCallback(code);
+      const user = await oauthService.handleGithubCallback(code, req);
       const loginCode = await oauthService.createLoginCodeForUser(user.id);
 
       return res.redirect(302, `${frontendBase}/auth/callback?code=${loginCode}`);

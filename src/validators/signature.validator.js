@@ -23,7 +23,7 @@ const isValidImageUrl = (val) => {
   // HTTPS URL starting with process.env.S3_PUBLIC_BASE_URL
   const s3Base = (
     process.env.S3_PUBLIC_BASE_URL ||
-    "https://sigsignature-assets-prod.s3.ap-southeast-2.amazonaws.com"
+    "https://sigsignature-prod-assets-2026.s3.ap-southeast-2.amazonaws.com"
   ).replace(/\/+$/, "");
 
   if (trimmed.startsWith("https://") && trimmed.startsWith(s3Base)) {
@@ -46,7 +46,7 @@ const isValidS3Url = (val) => {
 
   const s3Base = (
     process.env.S3_PUBLIC_BASE_URL ||
-    "https://sigsignature-assets-prod.s3.ap-southeast-2.amazonaws.com"
+    "https://sigsignature-prod-assets-2026.s3.ap-southeast-2.amazonaws.com"
   ).replace(/\/+$/, "");
 
   return trimmed.startsWith("https://") && trimmed.startsWith(s3Base);
