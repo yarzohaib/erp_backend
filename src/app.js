@@ -50,12 +50,16 @@ app.use("/api/v1/team", teamRoutes);
 app.use("/api/v1/public/team", publicTeamRoutes);
 app.use("/api/v1/account", accountRoutes);
 
-app.get("/health", (req, res) => {
+const healthHandler = (req, res) => {
   res.status(200).json({
     success: true,
-    message: "ERP Backend is running",
+    message: "SigSignature API is running",
+    status: "UP",
   });
-});
+};
+
+app.get("/health", healthHandler);
+app.get("/", healthHandler);
 
 // Centralized error handling middleware
 app.use(errorHandler);

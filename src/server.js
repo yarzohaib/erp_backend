@@ -17,7 +17,7 @@ async function startServer() {
     console.log("Database connected");
 
     const server = app.listen(PORT, () => {
-      console.log(`ERP Backend running on port ${PORT}`);
+      console.log(`SigSignature API running on port ${PORT}`);
     });
 
     const shutdown = async (signal) => {
